@@ -5,8 +5,10 @@ import ChatSidebar from "@/components/chat/ChatSidebar";
 import Composer from "@/components/chat/Composer";
 import MessageList from "@/components/chat/MessageList";
 import SourcesRail from "@/components/chat/SourcesRail";
+import SpeechControls from "@/components/chat/SpeechControls";
 import { CONVERSATIONS, draftAnswer, type Conversation, type Message, type Source } from "@/lib/data";
 import { useSidebar, SidebarToggle } from "@/lib/sidebar-context";
+import { useSpeechSettings } from "@/lib/speech/useSpeechSettings";
 import { useSpeaker } from "@/lib/useSpeech";
 
 const REPLY_DELAY_MS = 1300;
@@ -27,7 +29,10 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
   const { open: sidebarOpen, setOpen: setSidebarOpen } = useSidebar();
   const toastTimer = useRef<number | null>(null);
 
-  const { speakingId, speak } = useSpeaker();
+  const { settings } = useSpeechSettings();
+  const { speakingId, speak, speakIfAutoRead, stop, isSpeaking } = useSpeaker(
+    settings.autoReadReplies,
+  );
 
   const active = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? conversations[0],
@@ -61,8 +66,10 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
       setThinking(true);
 
       window.setTimeout(() => {
+        let answerText = "";
         updateConversation(active.id, (c) => {
           const answer = draftAnswer(text, c);
+          answerText = answer.text;
           return {
             ...c,
             subtitle:
@@ -76,10 +83,11 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
             ),
           };
         });
+        speakIfAutoRead(pendingId, answerText);
         setThinking(false);
       }, REPLY_DELAY_MS);
     },
-    [active, updateConversation],
+    [active, updateConversation, speakIfAutoRead],
   );
 
   const handleNewChat = useCallback(() => {
@@ -207,6 +215,8 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
             <span className="badge">RAG · {active.sources.length} sources</span>
           </div>
         </div>
+
+        <SpeechControls isSpeaking={isSpeaking} onStopSpeaking={stop} />
 
         <MessageList
           messages={active.messages}

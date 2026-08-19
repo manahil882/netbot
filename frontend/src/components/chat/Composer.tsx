@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useDictation } from "@/lib/useSpeech";
+import { useSpeechSettings } from "@/lib/speech/useSpeechSettings";
 
 type Props = {
   onSend: (text: string) => void;
@@ -13,20 +14,42 @@ export default function Composer({ onSend, disabled = false }: Props) {
   const [attachment, setAttachment] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const valueRef = useRef(value);
+  const { settings } = useSpeechSettings();
 
-  const appendTranscript = useCallback((transcript: string) => {
-    setValue((prev) => (prev ? `${prev} ${transcript}` : transcript));
-  }, []);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
-  const { listening, toggle: toggleMic } = useDictation(appendTranscript);
+  const handleFinalTranscript = useCallback(
+    (transcript: string) => {
+      const merged = valueRef.current ? `${valueRef.current} ${transcript}` : transcript;
+      const trimmed = merged.trim();
 
-  // Grow the textarea with its content up to the CSS max-height.
+      if (settings.voiceSend && trimmed) {
+        onSend(attachment ? `${trimmed}\n\n(attached: ${attachment})` : trimmed);
+        setValue("");
+        setAttachment(null);
+        return;
+      }
+
+      setValue(trimmed);
+    },
+    [settings.voiceSend, onSend, attachment],
+  );
+
+  const { listening, interim, error, supported, toggle, clearError } = useDictation({
+    onFinal: handleFinalTranscript,
+  });
+
+  const displayValue = listening && interim ? (value ? `${value} ${interim}` : interim) : value;
+
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  }, [displayValue]);
 
   function submit() {
     const trimmed = value.trim();
@@ -45,20 +68,38 @@ export default function Composer({ onSend, disabled = false }: Props) {
 
   return (
     <div className="composer-row">
+      {error && (
+        <div className="composer-error" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={clearError} aria-label="Dismiss">
+            ×
+          </button>
+        </div>
+      )}
+
       <div className={`composer ${listening ? "active" : ""}`.trim()}>
         <textarea
           ref={textareaRef}
-          className="txt"
+          className={`txt ${listening && interim ? "interim" : ""}`.trim()}
           rows={1}
-          placeholder={listening ? "Listening…" : "Ask netbot anything…"}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
+          placeholder={
+            listening
+              ? interim || "Listening…"
+              : settings.voiceSend
+                ? "Tap mic and speak — sends when you stop"
+                : "Ask netbot anything…"
+          }
+          value={displayValue}
+          onChange={(e) => {
+            if (!listening) setValue(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           aria-label="Message netbot"
+          readOnly={listening && Boolean(interim)}
         />
 
         {listening && (
-          <span className="waveform" title="listening" aria-hidden="true">
+          <span className="waveform" title="Listening" aria-hidden="true">
             <i />
             <i />
             <i />
@@ -88,10 +129,17 @@ export default function Composer({ onSend, disabled = false }: Props) {
         <button
           type="button"
           className={`icobtn mic ${listening ? "recording" : ""}`.trim()}
-          title={listening ? "Stop listening" : "Dictate your question"}
-          aria-label={listening ? "Stop listening" : "Dictate your question"}
+          title={
+            !supported
+              ? "Speech-to-text not supported in this browser"
+              : listening
+                ? "Stop listening"
+                : "Speech to text — dictate your question"
+          }
+          aria-label={listening ? "Stop listening" : "Speech to text"}
           aria-pressed={listening}
-          onClick={toggleMic}
+          onClick={toggle}
+          disabled={!supported}
         >
           🎙
         </button>
