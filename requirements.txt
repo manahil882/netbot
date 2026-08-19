@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+google-genai
+supabase
+deepface
+tf-keras
+python-multipart
+pydantic-settings
+gTTS
+whisper
+numpy
+opencv-python
