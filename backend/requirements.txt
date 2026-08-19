@@ -7,6 +7,10 @@ tf-keras
 python-multipart
 pydantic-settings
 gTTS
-whisper
+openai-whisper
 numpy
 opencv-python
+python-jose[cryptography]
+bcrypt
+pypdf
+python-docx
