@@ -13,6 +13,10 @@ import shutil
 from typing import List
 from datetime import datetime,timedelta
 
+from app.schemas import ChatMessageRequest, ChatMessageResponse, ChatMessageCreate
+from app.database.models import Message
+from app.services.ai_service import generate_reply
+
 
 # This tells FastAPI to look for an "authorization" header in Swagger
 header_scheme = APIKeyHeader(name="authorization", auto_error=False)
