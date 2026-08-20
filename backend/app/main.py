@@ -1,50 +1,57 @@
 import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
 from app.db.supabase_client import check_supabase_connection
 from app.db.vector_store import ensure_collection_exists
-from app.routers import threads
+from app.routers import auth, chat, threads, voice
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handles startup check connections to Supabase and Qdrant."""
     logger.info("Initializing system dependencies...")
-    
-    # 1. Check Supabase connection
     try:
         check_supabase_connection()
         logger.info("Supabase connection check succeeded.")
     except Exception as e:
-        logger.error(f"CRITICAL: Supabase connection check failed: {e}")
-        # We catch but log so the app runner gets clear failure reasons
+        logger.error("CRITICAL: Supabase connection check failed: %s", e)
 
-    # 2. Check Qdrant collection
     try:
         ensure_collection_exists()
         logger.info("Qdrant collection check/creation succeeded.")
     except Exception as e:
-        logger.error(f"CRITICAL: Qdrant collection verification failed: {e}")
+        logger.error("CRITICAL: Qdrant collection verification failed: %s", e)
 
     yield
     logger.info("Shutting down application...")
 
+
 app = FastAPI(
     title="AI Voice Chatbot API",
-    version="0.1.0",
-    lifespan=lifespan
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
-# Register RAG/DB Layer Routers
-app.include_router(threads.router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# TODO(teammate): Include auth router (/register, /login, face recognition)
-# TODO(teammate): Include chat/agent router (/chat with guardrails/agent tool calling)
-# TODO(teammate): Include voice router (/transcribe, /speak)
+app.include_router(auth.router)
+app.include_router(threads.router)
+app.include_router(chat.router)
+app.include_router(voice.router)
+
 
 @app.get("/health", tags=["health"])
 async def health() -> dict:
-    """Trivial health check endpoint."""
     return {"status": "healthy"}

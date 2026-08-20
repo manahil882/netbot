@@ -17,6 +17,61 @@ def check_supabase_connection() -> bool:
         logger.error(f"Failed to connect to Supabase: {e}")
         raise e
 
+
+def create_user(name: str, email: str, hashed_password: str, face_embedding: list | None = None) -> dict:
+    payload: dict = {
+        "name": name,
+        "email": email,
+        "hashed_password": hashed_password,
+    }
+    if face_embedding is not None:
+        payload["face_embedding"] = face_embedding
+    response = supabase.table("users").insert(payload).execute()
+    if not response.data:
+        raise ValueError("Failed to create user")
+    return response.data[0]
+
+
+def get_user_by_email(email: str) -> dict | None:
+    try:
+        response = (
+            supabase.table("users")
+            .select("id, name, email, hashed_password, face_embedding")
+            .eq("email", email)
+            .single()
+            .execute()
+        )
+        return response.data
+    except Exception:
+        return None
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    try:
+        response = (
+            supabase.table("users")
+            .select("id, name, email, hashed_password, face_embedding")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        return response.data
+    except Exception:
+        return None
+
+
+def update_user_face_embedding(user_id: str, face_embedding: list) -> dict:
+    response = (
+        supabase.table("users")
+        .update({"face_embedding": face_embedding})
+        .eq("id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise ValueError("Failed to update face embedding")
+    return response.data[0]
+
+
 def create_thread(user_id: str, title: str) -> dict:
     """Creates a new conversation thread for a user.
 

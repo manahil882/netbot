@@ -3,19 +3,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.thread import ThreadCreateRequest, ThreadOut, ThreadSummary, MessageCreate, MessageOut
 from app.db import supabase_client
+from app.dependencies.auth import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/threads", tags=["threads"])
-
-def get_current_user_id() -> UUID:
-    """Dependency that returns the authenticated user's ID.
-
-    TODO(teammate): Replace this mock dependency with the real authentication dependency
-    (e.g., JWT decoding and validation) once auth is wired up.
-    """
-    # Using a fixed default UUID for now (all endpoints require it)
-    return UUID("00000000-0000-0000-0000-000000000000")
 
 @router.post("", response_model=ThreadOut, status_code=status.HTTP_201_CREATED)
 async def create_new_thread(

@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    hashed_password TEXT NOT NULL
+    hashed_password TEXT NOT NULL,
+    face_embedding JSONB
 );
 
 -- 2. Threads Table
