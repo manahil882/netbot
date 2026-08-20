@@ -1,5 +1,7 @@
 # Deploy NetBot frontend on Vercel
 
+> Commits that trigger Vercel must be authored by the Vercel project owner on Hobby (private repos).
+
 The GitHub repo is a **monorepo**. The website is only in `frontend/`.
 If Vercel builds the repo root as Next.js, you get **`404: NOT_FOUND`**.
 
