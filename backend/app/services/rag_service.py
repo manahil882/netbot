@@ -41,6 +41,9 @@ def retrieve_context(query: str, top_k: int = 5, min_score: float = 0.4) -> list
             - "score": The cosine similarity score of the match.
     """
     try:
+        if qdrant_client is None:
+            logger.warning("Qdrant client is unavailable; returning no RAG context.")
+            return []
         model = get_embedding_model()
         # Embed the single query string
         query_vectors = list(model.embed([query]))

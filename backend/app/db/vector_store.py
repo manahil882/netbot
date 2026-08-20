@@ -26,12 +26,16 @@ try:
         logger.info(f"Initializing Qdrant client with location: {settings.QDRANT_URL}")
         qdrant_client = QdrantClient(location=settings.QDRANT_URL)
 except Exception as e:
-    logger.warning(f"Could not connect to Qdrant server at {settings.QDRANT_URL}: {e}")
-    # Local fallback path: backend/data/qdrant_local/
+    logger.warning("Could not connect to Qdrant server at %s: %s", settings.QDRANT_URL, e)
     local_path = Path(__file__).parent.parent.parent / "data" / "qdrant_local"
     local_path.mkdir(parents=True, exist_ok=True)
-    logger.warning(f"Falling back to local disk-based Qdrant storage at: {local_path}")
-    qdrant_client = QdrantClient(path=str(local_path))
+    logger.warning("Falling back to local disk-based Qdrant storage at: %s", local_path)
+    try:
+        qdrant_client = QdrantClient(path=str(local_path))
+    except Exception as local_error:
+        logger.error("Local Qdrant unavailable (%s). RAG retrieval will be empty.", local_error)
+        qdrant_client = None
+
 
 def ensure_collection_exists() -> None:
     """Checks if the Qdrant collection exists, and creates it if not.
@@ -39,6 +43,9 @@ def ensure_collection_exists() -> None:
     The collection is configured with a vector size of 384 (matching BAAI/bge-small-en-v1.5)
     and Cosine distance metric.
     """
+    if qdrant_client is None:
+        logger.warning("Skipping Qdrant collection check: no client available.")
+        return
     collection_name = settings.QDRANT_COLLECTION_NAME
     try:
         if not qdrant_client.collection_exists(collection_name):
