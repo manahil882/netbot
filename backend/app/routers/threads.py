@@ -1,9 +1,10 @@
 import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.models.thread import ThreadCreateRequest, ThreadOut, ThreadSummary, MessageCreate, MessageOut
+from app.models.thread import ThreadCreateRequest, ThreadOut, ThreadSummary, ThreadUpdateRequest, MessageCreate, MessageOut
 from app.db import supabase_client
 from app.dependencies.auth import get_current_user_id
+from app.services.rag_service import delete_thread_vectors
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,54 @@ async def get_user_threads(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error: {str(e)}"
         )
+
+
+def _owned_thread(thread_id: UUID, user_id: UUID) -> dict:
+    thread = supabase_client.get_thread_by_id(str(thread_id))
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    if UUID(thread["user_id"]) != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: thread does not belong to you",
+        )
+    return thread
+
+
+@router.patch("/{thread_id}", response_model=ThreadOut)
+def rename_thread(
+    thread_id: UUID,
+    payload: ThreadUpdateRequest,
+    user_id: UUID = Depends(get_current_user_id),
+) -> ThreadOut:
+    _owned_thread(thread_id, user_id)
+    try:
+        updated = supabase_client.update_thread(str(thread_id), payload.title.strip())
+        return ThreadOut.model_validate(updated)
+    except Exception as e:
+        logger.error(f"Failed to rename thread {thread_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+        )
+
+
+@router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_thread(
+    thread_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+) -> None:
+    _owned_thread(thread_id, user_id)
+    try:
+        delete_thread_vectors(str(user_id), str(thread_id))
+        supabase_client.delete_thread(str(thread_id))
+    except Exception as e:
+        logger.error(f"Failed to delete thread {thread_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+        )
+
 
 @router.get("/{thread_id}", response_model=list[MessageOut])
 async def get_thread_history(

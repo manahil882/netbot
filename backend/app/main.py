@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db.supabase_client import check_supabase_connection
 from app.db.vector_store import ensure_collection_exists
-from app.routers import auth, chat, threads, voice
+from app.routers import auth, chat, documents, threads, voice
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -49,6 +49,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(threads.router)
 app.include_router(chat.router)
+app.include_router(documents.router)
 app.include_router(voice.router)
 
 

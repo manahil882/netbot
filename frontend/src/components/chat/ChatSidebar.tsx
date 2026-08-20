@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Conversation } from "@/lib/data";
-import { USER } from "@/lib/data";
+import { accountFirstName, accountInitials } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
+import NetsolLogo from "@/components/NetsolLogo";
 
 type MenuState = { id: string; top: number; left: number } | null;
 
@@ -34,6 +36,7 @@ export default function ChatSidebar({
   onExport,
   onShare,
 }: Props) {
+  const { account } = useAuth();
   const [query, setQuery] = useState("");
   const [menu, setMenu] = useState<MenuState>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -113,7 +116,7 @@ export default function ChatSidebar({
     <aside className="sidebar" ref={sidebarRef}>
       <div className="sb-top">
         <Link href="/chat" className="sb-brand">
-          <span className="m">N</span> netbot
+          <NetsolLogo size={32} /> NetBot
         </Link>
         <button type="button" className="sb-close" onClick={onClose} aria-label="Close sidebar">
           ×
@@ -150,10 +153,14 @@ export default function ChatSidebar({
               <div
                 key={conversation.id}
                 className={`sb-item ${conversation.id === activeId ? "on" : ""}`.trim()}
-                onClick={() => onSelect(conversation.id)}
+                onClick={() => {
+                  if (renamingId === conversation.id) return;
+                  onSelect(conversation.id);
+                }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
+                  if (renamingId === conversation.id) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     onSelect(conversation.id);
@@ -168,7 +175,11 @@ export default function ChatSidebar({
                     onChange={(e) => setDraftTitle(e.target.value)}
                     onBlur={commitRename}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") commitRename();
+                      e.stopPropagation();
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitRename();
+                      }
                       if (e.key === "Escape") setRenamingId(null);
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -259,10 +270,10 @@ export default function ChatSidebar({
       )}
 
       <Link href="/settings/profile" className="sb-user">
-        <div className="av">{USER.initial}</div>
+        <div className="av">{accountInitials(account)}</div>
         <div className="who">
-          <b>{USER.shortName}</b>
-          <span>{USER.email}</span>
+          <b>{accountFirstName(account)}</b>
+          <span title={account?.email ?? ""}>{account?.email ?? ""}</span>
         </div>
         <div className="gear" aria-hidden="true">
           ⚙

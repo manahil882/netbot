@@ -9,6 +9,7 @@ import { apiRegister } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/config";
 import { isStrongPassword } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-context";
+import NetsolLogo from "@/components/NetsolLogo";
 
 type Phase = "account" | "face";
 
@@ -92,7 +93,7 @@ export default function SignUpScreen() {
     <div className="login-split">
       <div className="login-brand">
         <div className="lb-brand">
-          <span className="m">N</span> netbot
+          <NetsolLogo size={36} /> netbot
         </div>
         <h2 className="lb-title">
           Join

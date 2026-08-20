@@ -45,6 +45,24 @@ export function createThread(title: string) {
   });
 }
 
+export function renameThread(threadId: string, title: string) {
+  return apiFetch<{ id: string; title: string }>(`/threads/${threadId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteThread(threadId: string) {
+  return apiFetch<void>(`/threads/${threadId}`, { method: "DELETE" });
+}
+
+export type IndexedDocument = {
+  filename: string;
+  chunks: number;
+  pages: number;
+};
+
 export function sendChat(message: string, threadId?: string) {
   return apiFetch<ChatResponse>("/chat", {
     method: "POST",
@@ -53,7 +71,31 @@ export function sendChat(message: string, threadId?: string) {
       message,
       thread_id: threadId ?? null,
     }),
+    signal: AbortSignal.timeout(70_000),
   });
+}
+
+export async function uploadDocument(file: File, threadId: string) {
+  const form = new FormData();
+  form.set("file", file, file.name);
+  form.set("thread_id", threadId);
+  const { apiForm } = await import("@/lib/api/client");
+  return apiForm<{ filename: string; chunks: number; pages: number }>(
+    "/documents/upload",
+    form,
+    { timeoutMs: 120_000 },
+  );
+}
+
+export function listDocuments(threadId: string) {
+  return apiFetch<IndexedDocument[]>(`/documents?thread_id=${encodeURIComponent(threadId)}`);
+}
+
+export function deleteDocument(threadId: string, filename: string) {
+  return apiFetch<{ status: string; filename: string }>(
+    `/documents?thread_id=${encodeURIComponent(threadId)}&filename=${encodeURIComponent(filename)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function transcribeAudio(blob: Blob) {

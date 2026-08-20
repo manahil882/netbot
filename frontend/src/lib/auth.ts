@@ -163,3 +163,17 @@ export function getPasswordStrength(password: string): PasswordStrength {
 export function isStrongPassword(password: string): boolean {
   return getPasswordStrength(password).score >= 3 && password.length >= 8;
 }
+
+export function accountInitials(account: StoredAccount | null): string {
+  const name = account?.name?.trim() ?? "";
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  if (parts[0]) return parts[0][0].toUpperCase();
+  const email = account?.email?.trim() ?? "";
+  return (email[0] ?? "N").toUpperCase();
+}
+
+export function accountFirstName(account: StoredAccount | null): string {
+  const name = account?.name?.trim() ?? "";
+  return name.split(/\s+/).filter(Boolean)[0] || "You";
+}

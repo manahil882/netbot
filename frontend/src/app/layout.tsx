@@ -6,9 +6,13 @@ import { ThemeProvider, themeBootScript } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "netbot — by netsol",
+  title: "netbot",
   description:
     "Your knowledge, on speaking terms. Grounded RAG answers with face unlock and two-way voice.",
+  icons: {
+    icon: "/netbot-logo.png",
+    apple: "/netbot-logo.png",
+  },
 };
 
 export const viewport: Viewport = {

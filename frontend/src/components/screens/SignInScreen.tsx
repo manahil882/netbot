@@ -8,6 +8,7 @@ import FaceVerifyScreen from "@/components/screens/FaceVerifyScreen";
 import { apiLogin } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/config";
 import { useAuth } from "@/lib/auth-context";
+import NetsolLogo from "@/components/NetsolLogo";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -41,15 +42,11 @@ export default function SignInScreen() {
 
     try {
       const session = await apiLogin(normalizedEmail, password);
-      setSession(
-        session.access_token,
-        {
-          name: session.name,
-          email: session.email,
-          userId: session.user_id,
-        },
-        true,
-      );
+      setSession(session.access_token, {
+        name: session.name,
+        email: session.email,
+        userId: session.user_id,
+      });
       goToChat();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Sign in failed. Check your credentials.");
@@ -82,7 +79,7 @@ export default function SignInScreen() {
     <div className="login-split">
       <div className="login-brand">
         <div className="lb-brand">
-          <span className="m">N</span> netbot
+          <NetsolLogo size={36} /> netbot
         </div>
         <h2 className="lb-title">
           Knowledge

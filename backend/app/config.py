@@ -9,9 +9,11 @@ class Settings(BaseSettings):
     QDRANT_URL: str
     QDRANT_API_KEY: str | None = None
     QDRANT_COLLECTION_NAME: str = "chatbot_docs"
+    QDRANT_FALLBACK_LOCAL: bool = True
 
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
+    GEMINI_FALLBACK_MODELS: str = "gemini-2.5-flash-lite,gemini-2.5-flash"
 
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
@@ -29,6 +31,15 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def gemini_model_list(self) -> list[str]:
+        models = [self.GEMINI_MODEL.strip()]
+        for name in self.GEMINI_FALLBACK_MODELS.split(","):
+            name = name.strip()
+            if name and name not in models:
+                models.append(name)
+        return models
 
 
 settings = Settings()

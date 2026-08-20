@@ -1,17 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useDictation } from "@/lib/useSpeech";
 import { useSpeechSettings } from "@/lib/speech/useSpeechSettings";
 
+type AttachState = "uploading" | "ready" | "error";
+
 type Props = {
   onSend: (text: string) => void;
+  onAttach?: (file: File) => Promise<void>;
+  attachName?: string | null;
+  attachState?: AttachState | null;
   disabled?: boolean;
 };
 
-export default function Composer({ onSend, disabled = false }: Props) {
+export default function Composer({
+  onSend,
+  onAttach,
+  attachName = null,
+  attachState = null,
+  disabled = false,
+}: Props) {
   const [value, setValue] = useState("");
-  const [attachment, setAttachment] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const valueRef = useRef(value);
@@ -27,15 +37,14 @@ export default function Composer({ onSend, disabled = false }: Props) {
       const trimmed = merged.trim();
 
       if (settings.voiceSend && trimmed) {
-        onSend(attachment ? `${trimmed}\n\n(attached: ${attachment})` : trimmed);
+        onSend(trimmed);
         setValue("");
-        setAttachment(null);
         return;
       }
 
       setValue(trimmed);
     },
-    [settings.voiceSend, onSend, attachment],
+    [settings.voiceSend, onSend],
   );
 
   const { listening, interim, error, supported, toggle, clearError } = useDictation({
@@ -54,9 +63,15 @@ export default function Composer({ onSend, disabled = false }: Props) {
   function submit() {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
-    onSend(attachment ? `${trimmed}\n\n(attached: ${attachment})` : trimmed);
+    onSend(trimmed);
     setValue("");
-    setAttachment(null);
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !onAttach) return;
+    await onAttach(file);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -77,6 +92,16 @@ export default function Composer({ onSend, disabled = false }: Props) {
         </div>
       )}
 
+      {attachName && (
+        <div className={`attach-chip ${attachState ?? ""}`.trim()} role="status">
+          {attachState === "uploading"
+            ? `Indexing ${attachName}…`
+            : attachState === "error"
+              ? `Could not index ${attachName}`
+              : `${attachName} indexed — ask a question about it`}
+        </div>
+      )}
+
       <div className={`composer ${listening ? "active" : ""}`.trim()}>
         <textarea
           ref={textareaRef}
@@ -87,14 +112,14 @@ export default function Composer({ onSend, disabled = false }: Props) {
               ? interim || "Listening…"
               : settings.voiceSend
                 ? "Tap mic and speak — sends when you stop"
-                : "Ask netbot anything…"
+                : "Ask NetBot anything…"
           }
           value={displayValue}
           onChange={(e) => {
             if (!listening) setValue(e.target.value);
           }}
           onKeyDown={handleKeyDown}
-          aria-label="Message netbot"
+          aria-label="Message NetBot"
           readOnly={listening && Boolean(interim)}
         />
 
@@ -113,17 +138,19 @@ export default function Composer({ onSend, disabled = false }: Props) {
           ref={fileRef}
           type="file"
           hidden
-          onChange={(e) => setAttachment(e.target.files?.[0]?.name ?? null)}
+          accept=".pdf,.docx,.txt,.md,application/pdf,text/plain,text/markdown"
+          onChange={handleFileChange}
         />
 
         <button
           type="button"
-          className="icobtn"
-          title={attachment ?? "Attach a document"}
+          className={`icobtn ${attachState === "ready" ? "on" : ""}`.trim()}
+          title={attachName ?? "Attach a PDF, Word, TXT, or Markdown file"}
           aria-label="Attach a document"
           onClick={() => fileRef.current?.click()}
+          disabled={disabled || attachState === "uploading"}
         >
-          ＋
+          {attachState === "uploading" ? "…" : attachState === "ready" ? "✓" : "＋"}
         </button>
 
         <button

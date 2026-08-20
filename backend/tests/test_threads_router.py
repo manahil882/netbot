@@ -133,3 +133,38 @@ def test_chat_endpoint_creates_thread(client) -> None:
         assert data["thread_id"] == "11111111-1111-1111-1111-111111111111"
         assert "answer" in data
         assert data["tools_used"] == ["search_documents"]
+
+
+def test_rename_thread_success(client) -> None:
+    mock_thread = {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "user_id": "00000000-0000-0000-0000-000000000000",
+        "title": "Old title",
+        "created_at": "2026-08-19T10:00:00Z",
+        "updated_at": "2026-08-19T10:00:00Z",
+    }
+    renamed = {**mock_thread, "title": "New title"}
+    with patch("app.routers.threads.supabase_client.get_thread_by_id", return_value=mock_thread), patch(
+        "app.routers.threads.supabase_client.update_thread", return_value=renamed
+    ):
+        response = client.patch(
+            "/threads/11111111-1111-1111-1111-111111111111",
+            json={"title": "New title"},
+        )
+        assert response.status_code == 200
+        assert response.json()["title"] == "New title"
+
+
+def test_delete_thread_success(client) -> None:
+    mock_thread = {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "user_id": "00000000-0000-0000-0000-000000000000",
+        "title": "Gone",
+        "created_at": "2026-08-19T10:00:00Z",
+        "updated_at": "2026-08-19T10:00:00Z",
+    }
+    with patch("app.routers.threads.supabase_client.get_thread_by_id", return_value=mock_thread), patch(
+        "app.routers.threads.delete_thread_vectors"
+    ), patch("app.routers.threads.supabase_client.delete_thread"):
+        response = client.delete("/threads/11111111-1111-1111-1111-111111111111")
+        assert response.status_code == 204

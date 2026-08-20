@@ -28,6 +28,11 @@ class ThreadCreateRequest(BaseModel):
     """Schema for the thread creation request body."""
     title: str = Field(..., description="Title of the thread.")
 
+
+class ThreadUpdateRequest(BaseModel):
+    """Schema for renaming a thread."""
+    title: str = Field(..., min_length=1, max_length=120, description="New title of the thread.")
+
 class ThreadCreate(BaseModel):
     """Schema for creating a new thread."""
     title: str = Field(..., description="Title of the thread.")

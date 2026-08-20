@@ -30,6 +30,7 @@ type AuthContextValue = {
   login: () => void;
   logout: () => void;
   registerAccount: (account: StoredAccount) => void;
+  updateAccount: (patch: Partial<StoredAccount>) => void;
   setSession: (token: string, account: StoredAccount, faceEnrolled?: boolean) => void;
   markFaceEnrolled: () => void;
   deleteAccount: () => void;
@@ -69,14 +70,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setFaceEnrolled(false);
   }, []);
 
-  const setSession = useCallback((token: string, next: StoredAccount, enrolled = true) => {
+  const updateAccount = useCallback((patch: Partial<StoredAccount>) => {
+    setAccount((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      writeStoredAccount(next);
+      return next;
+    });
+  }, []);
+
+  const setSession = useCallback((token: string, next: StoredAccount, enrolled?: boolean) => {
     writeAccessToken(token);
     writeStoredAccount(next);
     writeStoredAuth(true);
-    writeFaceEnrolled(enrolled);
     setAccount(next);
     setAuthed(true);
-    setFaceEnrolled(enrolled);
+    if (enrolled !== undefined) {
+      writeFaceEnrolled(enrolled);
+      setFaceEnrolled(enrolled);
+    } else {
+      setFaceEnrolled(readFaceEnrolled());
+    }
   }, []);
 
   const markFaceEnrolled = useCallback(() => {
@@ -101,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         registerAccount,
+        updateAccount,
         setSession,
         markFaceEnrolled,
         deleteAccount,

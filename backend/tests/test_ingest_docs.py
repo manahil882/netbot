@@ -36,3 +36,11 @@ def test_extract_text_docx() -> None:
         assert len(sections) == 1
         assert sections[0]["text"] == "Word document paragraph content"
         assert sections[0]["page_number"] == 1
+
+
+def test_extract_text_from_uploaded_bytes() -> None:
+    from app.services.ingest_service import extract_text_from_bytes
+
+    sections = extract_text_from_bytes("policy.txt", b"Refunds are issued within 14 days.")
+    assert len(sections) == 1
+    assert "Refunds" in sections[0]["text"]

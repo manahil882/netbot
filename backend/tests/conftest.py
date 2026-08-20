@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "test-service-role-key")
 os.environ.setdefault("QDRANT_URL", "http://localhost:6333")
+os.environ.setdefault("QDRANT_FALLBACK_LOCAL", "false")
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key")
 

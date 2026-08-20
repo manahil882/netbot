@@ -38,16 +38,13 @@
   position: relative;
 }
 
-.lb-brand .m {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+.lb-brand img,
+.lb-brand .netbot-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 50%;
   background: white;
-  color: var(--navy);
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 15px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 

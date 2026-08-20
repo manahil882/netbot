@@ -23,17 +23,19 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  letter-spacing: 0.24em;
+  font-size: 14px;
+  letter-spacing: 0.02em;
   font-weight: 700;
-  color: var(--slate);
-  text-transform: uppercase;
+  color: var(--ink);
+  text-transform: none;
   text-decoration: none;
 }
 
-.netsol-mark svg {
-  width: 20px;
-  height: 20px;
+.netsol-mark img,
+.netbot-logo {
+  object-fit: contain;
+  display: block;
+  border-radius: 50%;
 }
 
 .div {

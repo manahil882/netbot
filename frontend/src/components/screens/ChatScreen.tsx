@@ -7,14 +7,21 @@ import MessageList from "@/components/chat/MessageList";
 import SourcesRail from "@/components/chat/SourcesRail";
 import SpeechControls from "@/components/chat/SpeechControls";
 import {
+  createThread,
+  deleteDocument,
+  deleteThread,
   getThreadMessages,
+  listDocuments,
   listThreads,
+  renameThread,
   sendChat,
+  uploadDocument,
   type Citation,
+  type IndexedDocument,
 } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/config";
 import { type Conversation, type Message, type Source } from "@/lib/data";
-import { useSidebar, SidebarToggle } from "@/lib/sidebar-context";
+import { useSidebar } from "@/lib/sidebar-context";
 import { useSpeechSettings } from "@/lib/speech/useSpeechSettings";
 import { useSpeaker } from "@/lib/useSpeech";
 
@@ -56,6 +63,10 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [highlightedSourceId, setHighlightedSourceId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [attachName, setAttachName] = useState<string | null>(null);
+  const [attachState, setAttachState] = useState<"uploading" | "ready" | "error" | null>(null);
+  const [chatFiles, setChatFiles] = useState<IndexedDocument[]>([]);
+  const [railOpen, setRailOpen] = useState(true);
   const { open: sidebarOpen, setOpen: setSidebarOpen } = useSidebar();
   const toastTimer = useRef<number | null>(null);
 
@@ -74,6 +85,22 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 2600);
   }, []);
+
+  const loadFiles = useCallback(async (threadId: string) => {
+    if (!threadId || threadId === NEW_CHAT_ID) {
+      setChatFiles([]);
+      return;
+    }
+    try {
+      setChatFiles(await listDocuments(threadId));
+    } catch {
+      setChatFiles([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadFiles(activeId);
+  }, [activeId, loadFiles]);
 
   useEffect(() => {
     async function loadThreads() {
@@ -168,12 +195,77 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
           ...c,
           messages: c.messages.filter((m) => m.id !== pendingId),
         }));
-        flash(err instanceof ApiError ? err.message : "Could not send message");
+        const name = err instanceof Error ? err.name : "";
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : name === "TimeoutError" || name === "AbortError"
+              ? "The assistant timed out. Try again."
+              : err instanceof TypeError
+                ? "Cannot reach the backend at localhost:8000. Make sure it is running."
+                : err instanceof Error
+                  ? err.message
+                  : "Could not send message";
+        flash(message);
       } finally {
         setThinking(false);
       }
     },
     [active, updateConversation, speakIfAutoRead, flash],
+  );
+
+  const handleAttach = useCallback(
+    async (file: File) => {
+      setAttachName(file.name);
+      setAttachState("uploading");
+      flash(`Indexing ${file.name}… first time can take a minute`);
+      try {
+        let threadId = active.id === NEW_CHAT_ID ? "" : active.id;
+        if (!threadId) {
+          const created = await createThread(file.name.replace(/\.[^.]+$/, "") || "Documents");
+          threadId = created.id;
+          setConversations((prev) => {
+            const rest = prev.filter((c) => c.id !== NEW_CHAT_ID);
+            return [
+              {
+                ...emptyConversation(),
+                id: threadId,
+                title: created.title || file.name,
+                subtitle: "Grounded RAG chat",
+              },
+              ...rest,
+            ];
+          });
+          setActiveId(threadId);
+        }
+        const result = await uploadDocument(file, threadId);
+        setAttachState("ready");
+        await loadFiles(threadId);
+        flash(`${result.filename} indexed (${result.chunks} chunks). Ask a question about it.`);
+      } catch (err) {
+        setAttachState("error");
+        flash(err instanceof ApiError ? err.message : "Could not upload document");
+      }
+    },
+    [active, flash, loadFiles],
+  );
+
+  const handleDeleteFile = useCallback(
+    async (filename: string) => {
+      if (active.id === NEW_CHAT_ID) return;
+      try {
+        await deleteDocument(active.id, filename);
+        await loadFiles(active.id);
+        updateConversation(active.id, (c) => ({
+          ...c,
+          sources: c.sources.filter((s) => s.title !== filename),
+        }));
+        flash(`Removed ${filename}`);
+      } catch (err) {
+        flash(err instanceof ApiError ? err.message : "Could not remove file");
+      }
+    },
+    [active.id, flash, loadFiles, updateConversation],
   );
 
   const handleNewChat = useCallback(() => {
@@ -184,8 +276,33 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
     setActiveId(NEW_CHAT_ID);
   }, [conversations]);
 
+  const handleRename = useCallback(
+    async (id: string, title: string) => {
+      if (id === NEW_CHAT_ID) {
+        updateConversation(id, (c) => ({ ...c, title }));
+        return;
+      }
+      try {
+        const updated = await renameThread(id, title);
+        updateConversation(id, (c) => ({ ...c, title: updated.title || title }));
+        flash("Chat renamed");
+      } catch (err) {
+        flash(err instanceof ApiError ? err.message : "Could not rename chat");
+      }
+    },
+    [flash, updateConversation],
+  );
+
   const handleDelete = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      if (id !== NEW_CHAT_ID) {
+        try {
+          await deleteThread(id);
+        } catch (err) {
+          flash(err instanceof ApiError ? err.message : "Could not delete chat");
+          return;
+        }
+      }
       setConversations((prev) => {
         const next = prev.filter((c) => c.id !== id);
         if (next.length === 0) return [emptyConversation()];
@@ -193,7 +310,7 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
         return next;
       });
       setPinnedIds((prev) => prev.filter((p) => p !== id));
-      flash("Conversation removed locally");
+      flash("Chat deleted");
     },
     [activeId, flash],
   );
@@ -252,7 +369,11 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
   if (!active) return null;
 
   return (
-    <div className={`app ${full ? "full" : ""} ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`.trim()}>
+    <div
+      className={`app ${full ? "full" : ""} ${sidebarOpen ? "sidebar-open" : "sidebar-closed"} ${
+        railOpen ? "rail-open" : "rail-closed"
+      }`.trim()}
+    >
       {sidebarOpen && (
         <button
           type="button"
@@ -272,7 +393,7 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
           if (window.innerWidth <= 640) setSidebarOpen(false);
         }}
         onNewChat={handleNewChat}
-        onRename={(id, title) => updateConversation(id, (c) => ({ ...c, title }))}
+        onRename={(id, title) => void handleRename(id, title)}
         onTogglePin={(id) =>
           setPinnedIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
         }
@@ -283,8 +404,6 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
 
       <main className="chat">
         <div className="chat-head">
-          <SidebarToggle />
-
           <div className="chat-head-title">
             <h4>{active.title}</h4>
             <div className="sub">{toast ?? (loading ? "Loading conversations…" : active.subtitle)}</div>
@@ -294,6 +413,19 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
               <span className="dot" aria-hidden="true" /> LIVE
             </span>
             <span className="badge">RAG · {active.sources.length} sources</span>
+            <button
+              type="button"
+              className={`rail-toggle ${railOpen ? "on" : ""}`.trim()}
+              onClick={() => setRailOpen((open) => !open)}
+              aria-label={railOpen ? "Hide sources panel" : "Show sources panel"}
+              aria-expanded={railOpen}
+              title={railOpen ? "Hide sources" : "Show sources"}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="14" y="4" width="7" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.7" />
+                <path d="M4 7h8M4 12h8M4 17h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -306,13 +438,27 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
           onCiteClick={handleCiteClick}
         />
 
-        <Composer onSend={handleSend} disabled={thinking || loading} />
+        <Composer
+          onSend={handleSend}
+          onAttach={handleAttach}
+          attachName={attachName}
+          attachState={attachState}
+          disabled={thinking || loading || attachState === "uploading"}
+        />
       </main>
 
       <SourcesRail
         sources={active.sources}
+        files={chatFiles}
         highlightedId={highlightedSourceId}
         onSelect={handleSourceSelect}
+        onDeleteFile={(filename) => void handleDeleteFile(filename)}
+      />
+      <button
+        type="button"
+        className="rail-backdrop"
+        aria-label="Close sources panel"
+        onClick={() => setRailOpen(false)}
       />
     </div>
   );

@@ -6,31 +6,28 @@ import { useRouter } from "next/navigation";
 import { AVATAR_OPTIONS } from "@/lib/data";
 import { useAuth } from "@/lib/auth-context";
 
-type EditableField = "name" | "email" | null;
+type EditableField = "name" | null;
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { account, faceEnrolled, logout, deleteAccount } = useAuth();
+  const { account, faceEnrolled, logout, deleteAccount, updateAccount } = useAuth();
   const [avatarId, setAvatarId] = useState(AVATAR_OPTIONS[0].id);
-  const [name, setName] = useState(account?.name ?? "");
-  const [email, setEmail] = useState(account?.email ?? "");
   const [editing, setEditing] = useState<EditableField>(null);
   const [draft, setDraft] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  const name = account?.name ?? "";
+  const email = account?.email ?? "";
   const avatar = AVATAR_OPTIONS.find((a) => a.id === avatarId) ?? AVATAR_OPTIONS[0];
 
-  function beginEdit(field: Exclude<EditableField, null>, current: string) {
-    setEditing(field);
-    setDraft(current);
+  function beginEditName() {
+    setEditing("name");
+    setDraft(name);
   }
 
   function commitEdit() {
     const value = draft.trim();
-    if (value) {
-      if (editing === "name") setName(value);
-      if (editing === "email") setEmail(value);
-    }
+    if (value && editing === "name") updateAccount({ name: value });
     setEditing(null);
   }
 
@@ -59,8 +56,8 @@ export default function ProfileScreen() {
           </div>
 
           <div className="pc-who">
-            <b>{name}</b>
-            <span>{email}</span>
+            <b>{name || "Your account"}</b>
+            <span>{email || "No email on this session"}</span>
             <div className={`pc-badge ${faceEnrolled ? "" : "off"}`.trim()}>
               <span className="d" aria-hidden="true" />
               {faceEnrolled ? "Face ID enrolled" : "Face ID not set up"}
@@ -115,12 +112,8 @@ export default function ProfileScreen() {
                   Display name
                   <small>How you appear in chats</small>
                 </div>
-                <div className="val">{name.split(" ")[0]}</div>
-                <button
-                  type="button"
-                  className="row-btn"
-                  onClick={() => beginEdit("name", name)}
-                >
+                <div className="val">{name}</div>
+                <button type="button" className="row-btn" onClick={beginEditName}>
                   Edit
                 </button>
               </>
@@ -131,40 +124,13 @@ export default function ProfileScreen() {
             <div className="ico" aria-hidden="true">
               ✉
             </div>
-            {editing === "email" ? (
-              <>
-                <input
-                  className="edit-input"
-                  type="email"
-                  value={draft}
-                  autoFocus
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitEdit();
-                    if (e.key === "Escape") setEditing(null);
-                  }}
-                  aria-label="Email address"
-                />
-                <button type="button" className="row-btn" onClick={commitEdit}>
-                  Save
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="lbl">
-                  Change email
-                  <small>Requires re-verification</small>
-                </div>
-                <div className="val">{email}</div>
-                <button
-                  type="button"
-                  className="row-btn"
-                  onClick={() => beginEdit("email", email)}
-                >
-                  Edit
-                </button>
-              </>
-            )}
+            <div className="lbl">
+              Email
+              <small>The address you registered with</small>
+            </div>
+            <div className="val" title={email}>
+              {email}
+            </div>
           </div>
 
           <Link href="/signup?mode=face" className="pc-row">
@@ -172,8 +138,12 @@ export default function ProfileScreen() {
               ◉
             </div>
             <div className="lbl">
-              Re-enroll Face ID
-              <small>{faceEnrolled ? "Last set up 12 days ago" : "Not set up yet"}</small>
+              {faceEnrolled ? "Update Face ID" : "Set up Face ID"}
+              <small>
+                {faceEnrolled
+                  ? "Capture a new face to replace the one used for sign-in"
+                  : "Not set up yet — enroll to unlock with your face"}
+              </small>
             </div>
             <div className="chev" aria-hidden="true">
               ›

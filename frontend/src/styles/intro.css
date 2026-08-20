@@ -33,6 +33,34 @@
   padding: 40px 24px;
 }
 
+.intro-logo {
+  display: block;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 18px;
+  object-fit: contain;
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+.intro-logo.orbit,
+.intro-logo.settle {
+  animation: intro-logo-in 0.9s ease-out both;
+}
+
+.intro-logo.reveal,
+.intro-logo.done {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@keyframes intro-logo-in {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .intro-orbit-wrap {
   position: absolute;
   inset: 0;

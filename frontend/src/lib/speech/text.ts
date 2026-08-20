@@ -1,6 +1,8 @@
+import { stripMarkdown } from "@/lib/markdown";
+
 /** Strip content that shouldn't be read aloud. */
 export function textForSpeech(raw: string): string {
-  return raw
+  return stripMarkdown(raw)
     .replace(/\(attached:.*?\)/gi, "")
     .replace(/\s+/g, " ")
     .trim();

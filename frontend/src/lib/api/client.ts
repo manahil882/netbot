@@ -15,7 +15,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: nextHeaders,
-    signal: options.signal ?? AbortSignal.timeout(45_000),
+    signal: options.signal ?? AbortSignal.timeout(35_000),
   });
 
   if (!response.ok) {
@@ -29,9 +29,9 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 export async function apiForm<T>(
   path: string,
   form: FormData,
-  options: { auth?: boolean; method?: string } = {},
+  options: { auth?: boolean; method?: string; timeoutMs?: number } = {},
 ): Promise<T> {
-  const { auth = true, method = "POST" } = options;
+  const { auth = true, method = "POST", timeoutMs } = options;
   const headers = new Headers();
   if (auth) {
     const token = readAccessToken();
@@ -42,6 +42,7 @@ export async function apiForm<T>(
     method,
     headers,
     body: form,
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
   });
 
   if (!response.ok) {
@@ -123,4 +124,10 @@ export async function apiFaceLogin(email: string, faceImage: Blob) {
     name: string;
     email: string;
   }>;
+}
+
+export async function apiFaceEnroll(faceImage: Blob) {
+  const form = new FormData();
+  form.set("face_image", faceImage, "face.jpg");
+  return apiForm<{ status: string }>("/auth/face-enroll", form);
 }

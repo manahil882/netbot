@@ -28,10 +28,8 @@ export default function TopNav() {
         {onChat && authed && <SidebarToggle className="topnav-sidebar-toggle" />}
         <Link href={authed ? "/chat" : "/"} className="netsol-mark">
           <NetsolLogo />
-          NETSOL
+          NetBot
         </Link>
-        <span className="div" />
-        <span className="nav-context">netbot</span>
       </div>
 
       {showAppTabs && !PUBLIC_ROUTES.includes(pathname) && (

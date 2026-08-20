@@ -114,6 +114,37 @@ def list_threads(user_id: str) -> list[dict]:
         logger.error(f"Error listing threads for user {user_id}: {e}")
         raise e
 
+def update_thread(thread_id: str, title: str) -> dict:
+    """Rename a conversation thread."""
+    try:
+        response = (
+            supabase.table("threads")
+            .update({
+                "title": title,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            .eq("id", thread_id)
+            .execute()
+        )
+        if not response.data:
+            raise ValueError("Failed to rename thread")
+        return response.data[0]
+    except Exception as e:
+        logger.error(f"Error renaming thread {thread_id}: {e}")
+        raise e
+
+
+def delete_thread(thread_id: str) -> None:
+    """Delete a thread. Messages cascade in the database."""
+    try:
+        response = supabase.table("threads").delete().eq("id", thread_id).execute()
+        if response.data is None:
+            raise ValueError("Failed to delete thread")
+    except Exception as e:
+        logger.error(f"Error deleting thread {thread_id}: {e}")
+        raise e
+
+
 def get_thread_by_id(thread_id: str) -> dict | None:
     """Retrieves a single thread by its ID.
 

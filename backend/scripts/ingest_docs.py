@@ -13,7 +13,7 @@ from qdrant_client.models import PointStruct
 sys.path.append(str(Path(__file__).parent.parent.absolute()))
 
 from app.config import settings
-from app.db.vector_store import qdrant_client, ensure_collection_exists
+from app.db.vector_store import get_qdrant_client, ensure_collection_exists
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -70,6 +70,10 @@ def extract_text_from_file(file_path: Path) -> list[dict]:
 def ingest_pdfs(raw_data_dir: Path) -> None:
     """Reads all supported documents (PDF, DOCX, TXT, MD), chunks them, embeds them, and upserts them to Qdrant."""
     ensure_collection_exists()
+    qdrant_client = get_qdrant_client()
+    if qdrant_client is None:
+        logger.error("Qdrant is not available. Start Qdrant on QDRANT_URL and retry.")
+        return
 
     # Look for all supported extensions
     supported_extensions = ("*.pdf", "*.docx", "*.txt", "*.md")

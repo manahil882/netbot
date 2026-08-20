@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from uuid import UUID
 
@@ -15,59 +14,54 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.post("", response_model=ChatResponse)
-async def chat_with_agent(
+@router.post("/", response_model=ChatResponse, include_in_schema=False)
+def chat_with_agent(
     payload: ChatRequest,
     user_id: UUID = Depends(get_current_user_id),
 ) -> ChatResponse:
     logger.info("Chat request from %s: %s", user_id, payload.message[:80])
-    thread_id = payload.thread_id
-
-    if thread_id is None:
-        title = payload.thread_title or payload.message[:48] or "New chat"
-        thread = supabase_client.create_thread(str(user_id), title)
-        thread_id = UUID(thread["id"])
-    else:
-        thread = supabase_client.get_thread_by_id(str(thread_id))
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
-        if UUID(thread["user_id"]) != user_id:
-            raise HTTPException(status_code=403, detail="Access denied")
-
-    history = supabase_client.get_thread_messages(str(thread_id))
-    supabase_client.add_message(str(thread_id), "user", payload.message)
-
     try:
-        answer, citations, tools_used = await asyncio.wait_for(
-            asyncio.to_thread(generate_chat_reply, payload.message, history),
-            timeout=40,
+        thread_id = payload.thread_id
+
+        if thread_id is None:
+            title = payload.thread_title or payload.message[:48] or "New chat"
+            thread = supabase_client.create_thread(str(user_id), title)
+            thread_id = UUID(thread["id"])
+        else:
+            thread = supabase_client.get_thread_by_id(str(thread_id))
+            if not thread:
+                raise HTTPException(status_code=404, detail="Thread not found")
+            if UUID(thread["user_id"]) != user_id:
+                raise HTTPException(status_code=403, detail="Access denied")
+
+        history = supabase_client.get_thread_messages(str(thread_id))
+        supabase_client.add_message(str(thread_id), "user", payload.message)
+
+        answer, citations, tools_used = generate_chat_reply(
+            payload.message, history, user_id=str(user_id), thread_id=str(thread_id)
         )
-    except TimeoutError:
-        logger.error("Chat generation timed out")
-        answer, citations, tools_used = (
-            "The language model timed out. RAG means Retrieval-Augmented Generation: "
-            "search your documents, then answer with that context. Try the question again.",
-            [],
-            [],
+        supabase_client.add_message(str(thread_id), "assistant", answer)
+
+        seen: set[tuple[str, int, int]] = set()
+        unique_citations = []
+        for cite in citations:
+            key = (cite.source_filename, cite.page_number, cite.chunk_index)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_citations.append(cite)
+
+        return ChatResponse(
+            thread_id=thread_id,
+            answer=answer,
+            citations=unique_citations,
+            tools_used=tools_used,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.exception("Chat generation failed")
-        raise HTTPException(status_code=500, detail=f"Chat failed: {exc}") from exc
-
-    supabase_client.add_message(str(thread_id), "assistant", answer)
-
-    # Deduplicate citations by source + page + chunk
-    seen: set[tuple[str, int, int]] = set()
-    unique_citations = []
-    for cite in citations:
-        key = (cite.source_filename, cite.page_number, cite.chunk_index)
-        if key in seen:
-            continue
-        seen.add(key)
-        unique_citations.append(cite)
-
-    return ChatResponse(
-        thread_id=thread_id,
-        answer=answer,
-        citations=unique_citations,
-        tools_used=tools_used,
-    )
+        logger.exception("Chat request failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chat failed: {exc}",
+        ) from exc
