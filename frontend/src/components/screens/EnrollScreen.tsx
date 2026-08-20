@@ -2,26 +2,27 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import FaceCamera from "@/components/FaceCamera";
+import FaceCamera, { type FaceCameraHandle } from "@/components/FaceCamera";
 import { ENROLL_STEPS } from "@/lib/data";
-import { useAuth } from "@/lib/auth-context";
+import { captureVideoFrame } from "@/lib/face-capture";
 
 const CAPTURE_MS = 3500;
 const TICK_MS = 40;
 
 type Props = {
-  onComplete?: () => void;
+  onComplete?: (faceImage: Blob | null) => void | Promise<void>;
   autoStart?: boolean;
 };
 
 export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
   const router = useRouter();
-  const { login } = useAuth();
+  const cameraRef = useRef<FaceCameraHandle | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [capturing, setCapturing] = useState(autoStart);
   const [done, setDone] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const finishTimerRef = useRef<number | null>(null);
 
@@ -68,19 +69,27 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
     clearTimer();
     clearFinishTimer();
     setFinishing(false);
+    setError(null);
     setStepIndex(index);
     setProgress(0);
     setCapturing(true);
     setDone(false);
   }
 
-  function finish() {
-    login();
-    if (onComplete) {
-      onComplete();
-      return;
+  async function finish() {
+    try {
+      const video = cameraRef.current?.getVideoElement();
+      const faceImage = video ? await captureVideoFrame(video) : null;
+      if (onComplete) {
+        await onComplete(faceImage);
+        return;
+      }
+      router.replace("/chat");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enrollment failed");
+      setDone(false);
+      setFinishing(false);
     }
-    router.replace("/chat");
   }
 
   function beginFinish() {
@@ -90,7 +99,7 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
     clearTimer();
 
     finishTimerRef.current = window.setTimeout(() => {
-      finish();
+      void finish();
     }, 1400);
   }
 
@@ -119,7 +128,7 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
               <br />
               <b>ready to go.</b>
             </h3>
-            <p>Enrollment complete. Taking you to netbot…</p>
+            <p>{finishing ? "Saving enrollment…" : "Enrollment complete. Taking you to netbot…"}</p>
           </>
         ) : (
           <>
@@ -131,6 +140,8 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
             <p>{step.copy}</p>
           </>
         )}
+
+        {error && <div className="field-error">{error}</div>}
 
         <div className="steps">
           {ENROLL_STEPS.map((s, i) => {
@@ -154,7 +165,7 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
         <div className="face-actions">
           {done ? (
             <button type="button" className="btn on-dark" disabled>
-              Opening netbot…
+              {finishing ? "Saving…" : "Opening netbot…"}
             </button>
           ) : (
             <>
@@ -181,7 +192,7 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
 
       <div className="face-visual">
         <div className={`face-circle ${done ? "matched" : ""}`.trim()}>
-          <FaceCamera active={!done} />
+          <FaceCamera ref={cameraRef} active={!done} />
           <div className="face-scan" aria-hidden="true" />
           <div className="face-outline" aria-hidden="true" />
           <div className="face-corners" aria-hidden="true" />

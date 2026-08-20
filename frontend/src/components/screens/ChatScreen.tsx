@@ -1,29 +1,59 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import Composer from "@/components/chat/Composer";
 import MessageList from "@/components/chat/MessageList";
 import SourcesRail from "@/components/chat/SourcesRail";
 import SpeechControls from "@/components/chat/SpeechControls";
-import { CONVERSATIONS, draftAnswer, type Conversation, type Message, type Source } from "@/lib/data";
+import {
+  getThreadMessages,
+  listThreads,
+  sendChat,
+  type Citation,
+} from "@/lib/api/chat";
+import { ApiError } from "@/lib/api/config";
+import { type Conversation, type Message, type Source } from "@/lib/data";
 import { useSidebar, SidebarToggle } from "@/lib/sidebar-context";
 import { useSpeechSettings } from "@/lib/speech/useSpeechSettings";
 import { useSpeaker } from "@/lib/useSpeech";
 
-const REPLY_DELAY_MS = 1300;
+const NEW_CHAT_ID = "new-chat";
 
-let idCounter = 0;
-function nextId(prefix: string) {
-  idCounter += 1;
-  return `${prefix}-${idCounter}`;
+function citationsToSources(citations: Citation[]): Source[] {
+  return citations.map((c, index) => ({
+    id: `src-${c.source_filename}-${c.page_number}-${c.chunk_index}-${index}`,
+    tag: "DOC",
+    title: c.source_filename,
+    blurb: c.excerpt || "",
+    meta: `p.${c.page_number || "?"}`,
+    match: Math.round(c.score * 100),
+  }));
+}
+
+function formatCite(citations: Citation[]): string | undefined {
+  const top = citations[0];
+  if (!top) return undefined;
+  return `${top.source_filename} · p.${top.page_number || "?"}`;
+}
+
+function emptyConversation(): Conversation {
+  return {
+    id: NEW_CHAT_ID,
+    title: "New chat",
+    group: "Today",
+    subtitle: "Ask anything — answers are grounded on your documents",
+    messages: [],
+    sources: [],
+  };
 }
 
 export default function ChatScreen({ full = true }: { full?: boolean }) {
-  const [conversations, setConversations] = useState<Conversation[]>(CONVERSATIONS);
-  const [activeId, setActiveId] = useState(CONVERSATIONS[0].id);
+  const [conversations, setConversations] = useState<Conversation[]>([emptyConversation()]);
+  const [activeId, setActiveId] = useState(NEW_CHAT_ID);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [thinking, setThinking] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [highlightedSourceId, setHighlightedSourceId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const { open: sidebarOpen, setOpen: setSidebarOpen } = useSidebar();
@@ -45,6 +75,42 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
     toastTimer.current = window.setTimeout(() => setToast(null), 2600);
   }, []);
 
+  useEffect(() => {
+    async function loadThreads() {
+      try {
+        const threads = await listThreads();
+        const loaded = await Promise.all(
+          threads.map(async (thread) => {
+            const messages = await getThreadMessages(thread.id);
+            return {
+              id: thread.id,
+              title: thread.title,
+              group: "Recent",
+              subtitle: "Grounded RAG chat",
+              messages: messages.map(
+                (m): Message => ({
+                  id: m.id,
+                  role: m.role === "assistant" ? "bot" : "user",
+                  text: m.content,
+                }),
+              ),
+              sources: [],
+            } satisfies Conversation;
+          }),
+        );
+        setConversations(loaded.length > 0 ? loaded : [emptyConversation()]);
+        setActiveId(loaded[0]?.id ?? NEW_CHAT_ID);
+      } catch (err) {
+        flash(err instanceof ApiError ? err.message : "Could not load conversations");
+        setConversations([emptyConversation()]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadThreads();
+  }, [flash]);
+
   const updateConversation = useCallback(
     (id: string, update: (conversation: Conversation) => Conversation) => {
       setConversations((prev) => prev.map((c) => (c.id === id ? update(c) : c)));
@@ -53,11 +119,12 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
   );
 
   const handleSend = useCallback(
-    (text: string) => {
+    async (text: string) => {
       if (!active) return;
 
-      const userMessage: Message = { id: nextId("u"), role: "user", text };
-      const pendingId = nextId("b");
+      const userMessage: Message = { id: `u-${Date.now()}`, role: "user", text };
+      const pendingId = `b-${Date.now()}`;
+      const threadId = active.id === NEW_CHAT_ID ? undefined : active.id;
 
       updateConversation(active.id, (c) => ({
         ...c,
@@ -65,54 +132,68 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
       }));
       setThinking(true);
 
-      window.setTimeout(() => {
-        let answerText = "";
-        updateConversation(active.id, (c) => {
-          const answer = draftAnswer(text, c);
-          answerText = answer.text;
-          return {
-            ...c,
-            subtitle:
-              c.sources.length > 0
-                ? `Grounded on ${c.sources.length} documents · updated just now`
-                : "No documents retrieved yet",
-            messages: c.messages.map((m) =>
-              m.id === pendingId
-                ? { id: pendingId, role: "bot", text: answer.text, cite: answer.cite }
-                : m,
-            ),
-          };
+      try {
+        const response = await sendChat(text, threadId);
+        const sources = citationsToSources(response.citations);
+        const cite = formatCite(response.citations);
+
+        setConversations((prev) => {
+          return prev.map((c) => {
+            if (c.id !== active.id) return c;
+            return {
+              id: response.thread_id,
+              title: c.title === "New chat" ? text.slice(0, 48) : c.title,
+              group: c.group,
+              subtitle:
+                sources.length > 0
+                  ? `Grounded on ${sources.length} document chunks`
+                  : "No documents retrieved yet",
+              messages: c.messages.map((m) =>
+                m.id === pendingId
+                  ? { id: pendingId, role: "bot" as const, text: response.answer, cite }
+                  : m,
+              ),
+              sources,
+            };
+          });
         });
-        speakIfAutoRead(pendingId, answerText);
+
+        if (active.id === NEW_CHAT_ID) {
+          setActiveId(response.thread_id);
+        }
+
+        speakIfAutoRead(pendingId, response.answer);
+      } catch (err) {
+        updateConversation(active.id, (c) => ({
+          ...c,
+          messages: c.messages.filter((m) => m.id !== pendingId),
+        }));
+        flash(err instanceof ApiError ? err.message : "Could not send message");
+      } finally {
         setThinking(false);
-      }, REPLY_DELAY_MS);
+      }
     },
-    [active, updateConversation, speakIfAutoRead],
+    [active, updateConversation, speakIfAutoRead, flash],
   );
 
   const handleNewChat = useCallback(() => {
-    const conversation: Conversation = {
-      id: nextId("chat"),
-      title: "New chat",
-      group: "Today",
-      subtitle: "No documents retrieved yet",
-      messages: [],
-      sources: [],
-    };
-    setConversations((prev) => [conversation, ...prev]);
-    setActiveId(conversation.id);
-  }, []);
+    const exists = conversations.some((c) => c.id === NEW_CHAT_ID);
+    if (!exists) {
+      setConversations((prev) => [emptyConversation(), ...prev]);
+    }
+    setActiveId(NEW_CHAT_ID);
+  }, [conversations]);
 
   const handleDelete = useCallback(
     (id: string) => {
       setConversations((prev) => {
         const next = prev.filter((c) => c.id !== id);
-        if (next.length === 0) return prev;
+        if (next.length === 0) return [emptyConversation()];
         if (id === activeId) setActiveId(next[0].id);
         return next;
       });
       setPinnedIds((prev) => prev.filter((p) => p !== id));
-      flash("Conversation deleted");
+      flash("Conversation removed locally");
     },
     [activeId, flash],
   );
@@ -206,7 +287,7 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
 
           <div className="chat-head-title">
             <h4>{active.title}</h4>
-            <div className="sub">{toast ?? active.subtitle}</div>
+            <div className="sub">{toast ?? (loading ? "Loading conversations…" : active.subtitle)}</div>
           </div>
           <div className="badges">
             <span className="badge live">
@@ -225,7 +306,7 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
           onCiteClick={handleCiteClick}
         />
 
-        <Composer onSend={handleSend} disabled={thinking} />
+        <Composer onSend={handleSend} disabled={thinking || loading} />
       </main>
 
       <SourcesRail

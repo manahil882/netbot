@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 type Props = {
   active: boolean;
 };
 
-export default function FaceCamera({ active }: Props) {
+export type FaceCameraHandle = {
+  getVideoElement: () => HTMLVideoElement | null;
+};
+
+const FaceCamera = forwardRef<FaceCameraHandle, Props>(function FaceCamera({ active }, ref) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<"idle" | "live" | "denied" | "missing">("idle");
+
+  useImperativeHandle(ref, () => ({
+    getVideoElement: () => videoRef.current,
+  }));
 
   useEffect(() => {
     if (!active) {
@@ -84,4 +92,6 @@ export default function FaceCamera({ active }: Props) {
       )}
     </>
   );
-}
+});
+
+export default FaceCamera;

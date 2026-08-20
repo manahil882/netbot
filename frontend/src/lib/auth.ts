@@ -1,12 +1,14 @@
 export const AUTH_KEY = "netbot-authenticated";
 export const ACCOUNT_KEY = "netbot-account";
+export const TOKEN_KEY = "netbot-access-token";
 export const FACE_KEY = "netbot-face-enrolled";
 const LEGACY_KEY = AUTH_KEY;
 
 export type StoredAccount = {
   name: string;
   email: string;
-  password: string;
+  password?: string;
+  userId?: string;
 };
 
 function getStorage() {
@@ -39,9 +41,33 @@ export function writeStoredAuth(value: boolean) {
   if (!storage) return;
   try {
     if (value) storage.setItem(AUTH_KEY, "1");
-    else storage.removeItem(AUTH_KEY);
+    else {
+      storage.removeItem(AUTH_KEY);
+      storage.removeItem(TOKEN_KEY);
+    }
   } catch {
     // Storage may be blocked in private mode; in-memory auth still applies.
+  }
+}
+
+export function readAccessToken(): string | null {
+  const storage = getStorage();
+  if (!storage) return null;
+  try {
+    return storage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeAccessToken(token: string | null) {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    if (token) storage.setItem(TOKEN_KEY, token);
+    else storage.removeItem(TOKEN_KEY);
+  } catch {
+    // Ignore.
   }
 }
 
@@ -95,6 +121,7 @@ export function clearAccountData() {
     storage.removeItem(ACCOUNT_KEY);
     storage.removeItem(FACE_KEY);
     storage.removeItem(AUTH_KEY);
+    storage.removeItem(TOKEN_KEY);
   } catch {
     // Ignore.
   }

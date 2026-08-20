@@ -5,19 +5,26 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PasswordField from "@/components/PasswordField";
 import EnrollScreen from "@/components/screens/EnrollScreen";
+import { apiRegister } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/config";
 import { isStrongPassword } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-context";
 
 type Phase = "account" | "face";
 
+type PendingSignup = {
+  name: string;
+  email: string;
+  password: string;
+};
+
 export default function SignUpScreen() {
   const router = useRouter();
-  const { account, faceEnrolled, login, registerAccount, markFaceEnrolled } = useAuth();
-  const [phase, setPhase] = useState<Phase>(
-    account && !faceEnrolled ? "face" : "account",
-  );
-  const [name, setName] = useState(account?.name ?? "");
-  const [email, setEmail] = useState(account?.email ?? "");
+  const { setSession } = useAuth();
+  const [phase, setPhase] = useState<Phase>("account");
+  const [pending, setPending] = useState<PendingSignup | null>(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -42,24 +49,40 @@ export default function SignUpScreen() {
       return;
     }
 
-    registerAccount({
+    setPending({
       name: name.trim(),
       email: email.trim().toLowerCase(),
       password,
     });
-
     setError(null);
     setPhase("face");
   }
 
-  if (phase === "face") {
+  if (phase === "face" && pending) {
     return (
       <EnrollScreen
         autoStart
-        onComplete={() => {
-          markFaceEnrolled();
-          login();
-          router.replace("/chat");
+        onComplete={async (faceImage) => {
+          try {
+            const session = await apiRegister(
+              pending.name,
+              pending.email,
+              pending.password,
+              faceImage,
+            );
+            setSession(
+              session.access_token,
+              {
+                name: session.name,
+                email: session.email,
+                userId: session.user_id,
+              },
+              true,
+            );
+            router.replace("/chat");
+          } catch (err) {
+            throw new Error(err instanceof ApiError ? err.message : "Registration failed");
+          }
         }}
       />
     );
@@ -79,9 +102,9 @@ export default function SignUpScreen() {
           terms.</b>
         </h2>
         <div className="lb-foot">
-          <span>Step 1 of 2</span>
-          <span>Account</span>
-          <span>Then Face ID</span>
+          <span>v2.0</span>
+          <span>Enterprise</span>
+          <span>SOC 2</span>
         </div>
         <div className="lb-orbits" aria-hidden="true">
           <i />
@@ -94,25 +117,22 @@ export default function SignUpScreen() {
         <h3 className="lf-title">
           Create your <b>account.</b>
         </h3>
-        <p className="lf-sub">
-          Account details first — Face ID is set up right after in step 2.
-        </p>
+        <p className="lf-sub">Step 1 of 2 — then enroll Face ID.</p>
 
         <div className="field">
           <label htmlFor="signup-name">Full name</label>
           <input
             id="signup-name"
             className="inp"
-            type="text"
             autoComplete="name"
-            placeholder="Manahil Asif"
+            placeholder="Your name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
 
         <div className="field">
-          <label htmlFor="signup-email">Email</label>
+          <label htmlFor="signup-email">Work email</label>
           <input
             id="signup-email"
             className="inp"
