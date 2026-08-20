@@ -28,10 +28,12 @@ def face_embedding_from_bytes(contents: bytes) -> list:
 
     img = _decode_image(contents)
     try:
+        # Skip Haar/RetinaFace detection: the UI already frames the face.
+        # opencv-python-headless does not ship haarcascade XML files.
         result = DeepFace.represent(
             img_path=img,
             model_name="Facenet",
-            detector_backend="opencv",
+            detector_backend="skip",
             enforce_detection=False,
         )
         embedding = result[0]["embedding"]
