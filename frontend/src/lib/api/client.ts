@@ -15,6 +15,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: nextHeaders,
+    signal: options.signal ?? AbortSignal.timeout(45_000),
   });
 
   if (!response.ok) {

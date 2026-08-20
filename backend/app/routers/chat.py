@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from uuid import UUID
 
@@ -18,6 +19,7 @@ async def chat_with_agent(
     payload: ChatRequest,
     user_id: UUID = Depends(get_current_user_id),
 ) -> ChatResponse:
+    logger.info("Chat request from %s: %s", user_id, payload.message[:80])
     thread_id = payload.thread_id
 
     if thread_id is None:
@@ -34,7 +36,23 @@ async def chat_with_agent(
     history = supabase_client.get_thread_messages(str(thread_id))
     supabase_client.add_message(str(thread_id), "user", payload.message)
 
-    answer, citations, tools_used = generate_chat_reply(payload.message, history)
+    try:
+        answer, citations, tools_used = await asyncio.wait_for(
+            asyncio.to_thread(generate_chat_reply, payload.message, history),
+            timeout=40,
+        )
+    except TimeoutError:
+        logger.error("Chat generation timed out")
+        answer, citations, tools_used = (
+            "The language model timed out. RAG means Retrieval-Augmented Generation: "
+            "search your documents, then answer with that context. Try the question again.",
+            [],
+            [],
+        )
+    except Exception as exc:
+        logger.exception("Chat generation failed")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {exc}") from exc
+
     supabase_client.add_message(str(thread_id), "assistant", answer)
 
     # Deduplicate citations by source + page + chunk

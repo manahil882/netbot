@@ -7,6 +7,7 @@ from google import genai
 from google.genai import types
 
 from app.config import settings
+from app.db.vector_store import qdrant_client
 from app.models.chat import Citation
 from app.services.rag_service import retrieve_context
 
@@ -14,11 +15,18 @@ logger = logging.getLogger(__name__)
 
 _client: genai.Client | None = None
 
+FALLBACK_ANSWER = (
+    "RAG (Retrieval-Augmented Generation) looks up relevant passages from your "
+    "documents, then the model answers using that context instead of guessing. "
+    "I could not reach the language model just now, so this is a local explanation. "
+    "Once Gemini is reachable, answers will be grounded on your ingested files."
+)
+
 
 def get_gemini_client() -> genai.Client:
     global _client
     if _client is None:
-        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        _client = genai.Client(api_key=settings.GEMINI_API_KEY.strip())
     return _client
 
 
@@ -78,8 +86,12 @@ def _format_history(messages: list[dict]) -> list[types.Content]:
 
 
 def generate_chat_reply(user_message: str, history: list[dict]) -> tuple[str, list[Citation], list[str]]:
-    client = get_gemini_client()
-    rag_chunks = retrieve_context(user_message, top_k=5)
+    rag_chunks: list[dict] = []
+    if qdrant_client is not None:
+        rag_chunks = retrieve_context(user_message, top_k=5)
+    else:
+        logger.warning("Skipping RAG retrieval: Qdrant is unavailable.")
+
     rag_block = "\n\n".join(
         f"[{c.get('source_filename', 'doc')} p.{c.get('page_number', '?')}] {c.get('text', '')}"
         for c in rag_chunks
@@ -87,6 +99,7 @@ def generate_chat_reply(user_message: str, history: list[dict]) -> tuple[str, li
     system = (
         "You are Netbot, a grounded enterprise assistant. "
         "Prefer retrieved document context. Cite sources when used. "
+        "If no documents were retrieved, answer from general knowledge. "
         "Use tools when document search or current time is needed.\n\n"
         f"Retrieved context:\n{rag_block or '(none)'}"
     )
@@ -112,33 +125,41 @@ def generate_chat_reply(user_message: str, history: list[dict]) -> tuple[str, li
         temperature=0.3,
     )
 
-    for _ in range(4):
-        response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=contents,
-            config=config,
-        )
-
-        candidate = response.candidates[0] if response.candidates else None
-        if not candidate or not candidate.content or not candidate.content.parts:
-            break
-
-        function_calls = [p.function_call for p in candidate.content.parts if p.function_call]
-        if not function_calls:
-            text = response.text or "I could not generate a response."
-            return text.strip(), all_citations, tools_used
-
-        contents.append(candidate.content)
-        tool_response_parts: list[types.Part] = []
-        for call in function_calls:
-            args = dict(call.args or {})
-            result, citations, tool_name = _run_tool(call.name or "", args)
-            if tool_name:
-                tools_used.append(tool_name)
-            all_citations.extend(citations)
-            tool_response_parts.append(
-                types.Part.from_function_response(name=call.name or "tool", response={"result": result})
+    try:
+        client = get_gemini_client()
+        for _ in range(4):
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=contents,
+                config=config,
             )
-        contents.append(types.Content(role="user", parts=tool_response_parts))
 
-    return "I could not complete the request.", all_citations, tools_used
+            candidate = response.candidates[0] if response.candidates else None
+            if not candidate or not candidate.content or not candidate.content.parts:
+                break
+
+            function_calls = [p.function_call for p in candidate.content.parts if p.function_call]
+            if not function_calls:
+                text = response.text or "I could not generate a response."
+                return text.strip(), all_citations, tools_used
+
+            contents.append(candidate.content)
+            tool_response_parts: list[types.Part] = []
+            for call in function_calls:
+                args = dict(call.args or {})
+                result, citations, tool_name = _run_tool(call.name or "", args)
+                if tool_name:
+                    tools_used.append(tool_name)
+                all_citations.extend(citations)
+                tool_response_parts.append(
+                    types.Part.from_function_response(
+                        name=call.name or "tool",
+                        response={"result": result},
+                    )
+                )
+            contents.append(types.Content(role="user", parts=tool_response_parts))
+
+        return "I could not complete the request.", all_citations, tools_used
+    except Exception as exc:
+        logger.exception("Gemini chat failed: %s", exc)
+        return FALLBACK_ANSWER, all_citations, tools_used
