@@ -28,10 +28,26 @@ def face_embedding_from_bytes(contents: bytes) -> list:
 
     img = _decode_image(contents)
     try:
-        result = DeepFace.represent(img_path=img, model_name="Facenet", enforce_detection=False)
-        return result[0]["embedding"]
+        result = DeepFace.represent(
+            img_path=img,
+            model_name="Facenet",
+            detector_backend="opencv",
+            enforce_detection=False,
+        )
+        embedding = result[0]["embedding"]
+        if not embedding:
+            raise HTTPException(status_code=400, detail="Could not extract face from image")
+        return embedding
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Face embedding failed: %s", exc)
+        message = str(exc)
+        if "downloading" in message.lower() or "facenet_weights" in message.lower():
+            raise HTTPException(
+                status_code=503,
+                detail="Face model is still downloading. Wait a moment and tap Finish enrollment again.",
+            ) from exc
         raise HTTPException(status_code=400, detail="Could not extract face from image") from exc
 
 

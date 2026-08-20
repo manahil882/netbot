@@ -80,6 +80,13 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
     try {
       const video = cameraRef.current?.getVideoElement();
       const faceImage = video ? await captureVideoFrame(video) : null;
+      if (!faceImage) {
+        throw new Error("Could not capture your face. Keep the camera on and try again.");
+      }
+
+      setDone(true);
+      setCapturing(false);
+
       if (onComplete) {
         await onComplete(faceImage);
         return;
@@ -93,14 +100,9 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
   }
 
   function beginFinish() {
-    setDone(true);
-    setCapturing(false);
     setFinishing(true);
     clearTimer();
-
-    finishTimerRef.current = window.setTimeout(() => {
-      void finish();
-    }, 1400);
+    void finish();
   }
 
   function handleNext() {
