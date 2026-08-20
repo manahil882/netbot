@@ -38,10 +38,10 @@ def get_user_by_email(email: str) -> dict | None:
             supabase.table("users")
             .select("id, name, email, hashed_password, face_embedding")
             .eq("email", email)
-            .single()
+            .limit(1)
             .execute()
         )
-        return response.data
+        return response.data[0] if response.data else None
     except Exception:
         return None
 

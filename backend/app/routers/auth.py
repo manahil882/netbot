@@ -40,12 +40,16 @@ async def register(
                 detail="Face recognition is unavailable. Install ML deps: pip install -r requirements-ml.txt",
             ) from exc
 
-    user = supabase_client.create_user(
-        name=name,
-        email=email,
-        hashed_password=hash_password(password),
-        face_embedding=face_embedding,
-    )
+    try:
+        user = supabase_client.create_user(
+            name=name,
+            email=email,
+            hashed_password=hash_password(password),
+            face_embedding=face_embedding,
+        )
+    except Exception as exc:
+        logger.exception("Failed to create user")
+        raise HTTPException(status_code=500, detail="Could not create account. Try again.") from exc
     token = create_access_token(UUID(user["id"]), user["email"])
     return TokenResponse(
         access_token=token,
