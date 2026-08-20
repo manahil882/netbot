@@ -7,7 +7,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.config import settings
 from app.db import supabase_client
 from app.dependencies.auth import get_current_user_id
-from app.dependencies.auth import get_current_user_id
 from app.models.user import TokenResponse
 from app.services.auth_service import create_access_token, hash_password, verify_password
 from app.services.face_service import cosine_similarity, face_embedding_from_bytes, stored_embedding
@@ -29,8 +28,17 @@ async def register(
 
     face_embedding = None
     if face_image is not None:
-        contents = await face_image.read()
-        face_embedding = face_embedding_from_bytes(contents)
+        try:
+            contents = await face_image.read()
+            face_embedding = face_embedding_from_bytes(contents)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Face enrollment failed during register")
+            raise HTTPException(
+                status_code=503,
+                detail="Face recognition is unavailable. Install ML deps: pip install -r requirements-ml.txt",
+            ) from exc
 
     user = supabase_client.create_user(
         name=name,
