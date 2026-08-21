@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://netbot-dev.vercel.app"
+    # Allow all Vercel preview URLs like https://netbot-xxx.vercel.app
+    CORS_ORIGIN_REGEX: str | None = r"https://.*\.vercel\.app"
     FACE_MATCH_THRESHOLD: float = 0.70
 
     # Email OTP (Resend). Without RESEND_API_KEY, codes are logged server-side.
