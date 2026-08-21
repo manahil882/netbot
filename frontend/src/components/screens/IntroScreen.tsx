@@ -34,13 +34,6 @@ export default function IntroScreen() {
       </div>
 
       <div className="intro-content">
-        <img
-          src="/netbot-logo.png"
-          alt=""
-          width={120}
-          height={120}
-          className={`intro-logo ${phase}`}
-        />
         <h1 className={`wordmark intro-wordmark ${phase}`} aria-label="netbot">
           <span className="net">net</span>
           <span className="b">b</span>
