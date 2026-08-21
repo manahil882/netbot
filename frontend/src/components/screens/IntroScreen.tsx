@@ -2,18 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 
 type Phase = "orbit" | "settle" | "reveal" | "done";
 
 export default function IntroScreen() {
   const router = useRouter();
+  const { ready, authed } = useAuth();
   const [phase, setPhase] = useState<Phase>("orbit");
 
   useEffect(() => {
+    if (!ready) return;
+
     const settle = window.setTimeout(() => setPhase("settle"), 1200);
     const reveal = window.setTimeout(() => setPhase("reveal"), 2400);
     const done = window.setTimeout(() => setPhase("done"), 3200);
-    const redirect = window.setTimeout(() => router.replace("/signin"), 4200);
+    const redirect = window.setTimeout(
+      () => router.replace(authed ? "/chat" : "/signin"),
+      4200,
+    );
 
     return () => {
       window.clearTimeout(settle);
@@ -21,7 +28,7 @@ export default function IntroScreen() {
       window.clearTimeout(done);
       window.clearTimeout(redirect);
     };
-  }, [router]);
+  }, [router, ready, authed]);
 
   return (
     <section className={`intro ${phase}`}>
@@ -48,7 +55,7 @@ export default function IntroScreen() {
 
         {phase === "done" && (
           <p className="intro-hint" role="status">
-            Taking you to sign in…
+            {authed ? "Opening your workspace…" : "Taking you to sign in…"}
           </p>
         )}
       </div>

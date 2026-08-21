@@ -58,9 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    writeStoredAuth(false);
-    writeAccessToken(null);
+    clearAccountData();
     setAuthed(false);
+    setAccount(null);
+    setFaceEnrolled(false);
   }, []);
 
   const registerAccount = useCallback((next: StoredAccount) => {
@@ -89,7 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       writeFaceEnrolled(enrolled);
       setFaceEnrolled(enrolled);
     } else {
-      setFaceEnrolled(readFaceEnrolled());
+      writeFaceEnrolled(false);
+      setFaceEnrolled(false);
     }
   }, []);
 

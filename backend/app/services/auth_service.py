@@ -28,6 +28,31 @@ def create_access_token(user_id: UUID, email: str) -> str:
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
+def create_email_verified_token(email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=30)
+    payload = {
+        "email": email.strip().lower(),
+        "purpose": "email_verified",
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def require_email_verified_token(token: str, email: str) -> None:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+    except JWTError as exc:
+        raise ValueError("Invalid or expired email verification") from exc
+    if payload.get("purpose") != "email_verified":
+        raise ValueError("Invalid or expired email verification")
+    if payload.get("email") != email.strip().lower():
+        raise ValueError("Email verification does not match this address")
+
+
 def decode_access_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])

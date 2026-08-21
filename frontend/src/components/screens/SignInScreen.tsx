@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PasswordField from "@/components/PasswordField";
@@ -12,12 +12,16 @@ import NetsolLogo from "@/components/NetsolLogo";
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { authed, setSession } = useAuth();
+  const { authed, ready, setSession } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [faceVerify, setFaceVerify] = useState(false);
+
+  useEffect(() => {
+    if (ready && authed) router.replace("/chat");
+  }, [ready, authed, router]);
 
   function goToChat() {
     router.replace("/chat");
@@ -42,11 +46,15 @@ export default function SignInScreen() {
 
     try {
       const session = await apiLogin(normalizedEmail, password);
-      setSession(session.access_token, {
-        name: session.name,
-        email: session.email,
-        userId: session.user_id,
-      });
+      setSession(
+        session.access_token,
+        {
+          name: session.name,
+          email: session.email,
+          userId: session.user_id,
+        },
+        Boolean(session.face_enrolled),
+      );
       goToChat();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Sign in failed. Check your credentials.");

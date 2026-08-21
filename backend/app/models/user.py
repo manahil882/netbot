@@ -20,3 +20,4 @@ class TokenResponse(BaseModel):
     user_id: UUID
     name: str
     email: EmailStr
+    face_enrolled: bool = False

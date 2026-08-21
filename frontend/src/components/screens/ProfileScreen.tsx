@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { apiDeleteAccount, apiUpdateProfile } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/config";
 import { AVATAR_OPTIONS } from "@/lib/data";
 import { useAuth } from "@/lib/auth-context";
 
 type EditableField = "name" | null;
+
+const AVATAR_KEY = "netbot.avatarId";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -15,6 +19,26 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState<EditableField>(null);
   const [draft, setDraft] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = window.sessionStorage.getItem(AVATAR_KEY);
+      if (saved && AVATAR_OPTIONS.some((a) => a.id === saved)) setAvatarId(saved);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function pickAvatar(id: string) {
+    setAvatarId(id);
+    try {
+      window.sessionStorage.setItem(AVATAR_KEY, id);
+    } catch {
+      // ignore
+    }
+  }
 
   const name = account?.name ?? "";
   const email = account?.email ?? "";
@@ -23,12 +47,39 @@ export default function ProfileScreen() {
   function beginEditName() {
     setEditing("name");
     setDraft(name);
+    setError(null);
   }
 
-  function commitEdit() {
+  async function commitEdit() {
     const value = draft.trim();
-    if (value && editing === "name") updateAccount({ name: value });
-    setEditing(null);
+    if (!value || editing !== "name") {
+      setEditing(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await apiUpdateProfile(value);
+      updateAccount({ name: updated.name });
+      setEditing(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update name");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiDeleteAccount();
+      deleteAccount();
+      router.replace("/");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not delete account");
+      setBusy(false);
+    }
   }
 
   return (
@@ -44,12 +95,10 @@ export default function ProfileScreen() {
               type="button"
               className="cam"
               aria-label="Change avatar"
-              onClick={() =>
-                setAvatarId((prev) => {
-                  const index = AVATAR_OPTIONS.findIndex((a) => a.id === prev);
-                  return AVATAR_OPTIONS[(index + 1) % AVATAR_OPTIONS.length].id;
-                })
-              }
+              onClick={() => {
+                const index = AVATAR_OPTIONS.findIndex((a) => a.id === avatarId);
+                pickAvatar(AVATAR_OPTIONS[(index + 1) % AVATAR_OPTIONS.length].id);
+              }}
             >
               ✎
             </button>
@@ -73,7 +122,7 @@ export default function ProfileScreen() {
               type="button"
               className={`avn ${option.id === avatarId ? "on" : ""}`.trim()}
               style={{ background: option.background, color: option.color }}
-              onClick={() => setAvatarId(option.id)}
+              onClick={() => pickAvatar(option.id)}
               aria-label={`Use avatar ${option.glyph}`}
               aria-pressed={option.id === avatarId}
             >
@@ -97,13 +146,13 @@ export default function ProfileScreen() {
                   autoFocus
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") commitEdit();
+                    if (e.key === "Enter") void commitEdit();
                     if (e.key === "Escape") setEditing(null);
                   }}
                   aria-label="Display name"
                 />
-                <button type="button" className="row-btn" onClick={commitEdit}>
-                  Save
+                <button type="button" className="row-btn" disabled={busy} onClick={() => void commitEdit()}>
+                  {busy ? "Saving…" : "Save"}
                 </button>
               </>
             ) : (
@@ -172,19 +221,24 @@ export default function ProfileScreen() {
           <button
             type="button"
             className="pc-row danger"
-            onClick={() => setConfirmingDelete(true)}
+            onClick={() => {
+              setError(null);
+              setConfirmingDelete(true);
+            }}
           >
             <div className="ico" aria-hidden="true">
               🗑
             </div>
             <div className="lbl">
               Delete account
-              <small>Removes chats, sources, face data</small>
+              <small>Permanently removes your account and chats</small>
             </div>
             <div className="chev" aria-hidden="true">
               ›
             </div>
           </button>
+
+          {error && <div className="field-error" style={{ margin: "12px 0 0" }}>{error}</div>}
         </div>
       </div>
 
@@ -194,18 +248,19 @@ export default function ProfileScreen() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-title"
-          onClick={() => setConfirmingDelete(false)}
+          onClick={() => !busy && setConfirmingDelete(false)}
         >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h4 id="delete-title">Delete your account?</h4>
             <p>
-              This removes every conversation, the documents you indexed, and your enrolled face
-              data. It cannot be undone.
+              This permanently deletes your account, conversations, indexed documents, and Face ID
+              data from the server. It cannot be undone.
             </p>
             <div className="modal-actions">
               <button
                 type="button"
                 className="btn ghost"
+                disabled={busy}
                 onClick={() => setConfirmingDelete(false)}
               >
                 Keep account
@@ -213,12 +268,10 @@ export default function ProfileScreen() {
               <button
                 type="button"
                 className="btn danger"
-                onClick={() => {
-                  deleteAccount();
-                  router.replace("/");
-                }}
+                disabled={busy}
+                onClick={() => void confirmDelete()}
               >
-                Delete everything
+                {busy ? "Deleting…" : "Delete everything"}
               </button>
             </div>
           </div>

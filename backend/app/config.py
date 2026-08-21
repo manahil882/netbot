@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     FACE_MATCH_THRESHOLD: float = 0.70
 
+    # Email OTP (Resend). Without RESEND_API_KEY, codes are logged server-side.
+    RESEND_API_KEY: str | None = None
+    EMAIL_FROM: str = "NetBot <onboarding@resend.dev>"
+    EMAIL_OTP_EXPIRE_MINUTES: int = 10
+    EMAIL_DEV_EXPOSE_CODE: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

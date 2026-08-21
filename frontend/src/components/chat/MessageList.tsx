@@ -43,48 +43,48 @@ export default function MessageList({ messages, speakingId, onSpeak, onCiteClick
             {message.role === "user" ? accountInitials(account) : <NetsolLogo size={34} />}
           </div>
 
-          <div className="bubble">
-            {message.pending ? (
-              <span className="typing" role="status" aria-label="NetBot is typing">
-                <i />
-                <i />
-                <i />
-              </span>
-            ) : (
-              <>
-                {message.role === "bot" ? (
-                  <MarkdownBody text={message.text} />
-                ) : (
-                  message.text
-                )}
-                <div className="bubble-actions">
-                  {message.role === "bot" && message.cite && (
-                    <button
-                      type="button"
-                      className="cite"
-                      onClick={() => onCiteClick(message.cite as string)}
-                    >
-                      📄 {message.cite}
-                    </button>
-                  )}
-                  {message.role === "bot" && (
-                    <button
-                      type="button"
-                      className={`speak-btn ${speakingId === message.id ? "on" : ""}`.trim()}
-                      onClick={() => onSpeak(message)}
-                    >
-                      🔊 {speakingId === message.id ? "Stop" : "Play"}
-                    </button>
-                  )}
+          <div className="msg-stack">
+            <div className="bubble">
+              {message.pending ? (
+                <span className="typing" role="status" aria-label="NetBot is typing">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              ) : message.role === "bot" ? (
+                <MarkdownBody text={message.text} />
+              ) : (
+                message.text
+              )}
+            </div>
+
+            {!message.pending && message.role === "bot" && (
+              <div className="bubble-actions">
+                {message.cite && (
                   <button
                     type="button"
-                    className="copy-btn"
-                    onClick={() => void copyText(message)}
+                    className="cite"
+                    onClick={() => onCiteClick(message.cite as string)}
                   >
-                    {copiedId === message.id ? "Copied" : "Copy"}
+                    📄 {message.cite}
                   </button>
-                </div>
-              </>
+                )}
+                <button
+                  type="button"
+                  className={`speak-btn ${speakingId === message.id ? "on" : ""}`.trim()}
+                  onClick={() => onSpeak(message)}
+                >
+                  🔊 {speakingId === message.id ? "Stop" : "Play"}
+                </button>
+                <button
+                  type="button"
+                  className="copy-btn"
+                  onClick={() => void copyText(message)}
+                  aria-label="Copy message"
+                >
+                  {copiedId === message.id ? "Copied" : "Copy"}
+                </button>
+              </div>
             )}
           </div>
         </div>

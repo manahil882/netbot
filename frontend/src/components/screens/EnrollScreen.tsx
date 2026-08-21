@@ -12,9 +12,15 @@ const TICK_MS = 40;
 type Props = {
   onComplete?: (faceImage: Blob | null) => void | Promise<void>;
   autoStart?: boolean;
+  /** Allow finishing signup without a face capture. */
+  allowSkip?: boolean;
 };
 
-export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
+export default function EnrollScreen({
+  onComplete,
+  autoStart = true,
+  allowSkip = false,
+}: Props) {
   const router = useRouter();
   const cameraRef = useRef<FaceCameraHandle | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
@@ -23,6 +29,7 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
   const [done, setDone] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState(false);
   const timerRef = useRef<number | null>(null);
   const finishTimerRef = useRef<number | null>(null);
 
@@ -76,16 +83,11 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
     setDone(false);
   }
 
-  async function finish() {
+  async function finish(faceImage: Blob | null) {
     try {
-      const video = cameraRef.current?.getVideoElement();
-      const faceImage = video ? await captureVideoFrame(video) : null;
-      if (!faceImage) {
-        throw new Error("Could not capture your face. Keep the camera on and try again.");
-      }
-
       setDone(true);
       setCapturing(false);
+      setSkipped(faceImage === null);
 
       if (onComplete) {
         await onComplete(faceImage);
@@ -96,13 +98,36 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
       setError(err instanceof Error ? err.message : "Enrollment failed");
       setDone(false);
       setFinishing(false);
+      setSkipped(false);
+    }
+  }
+
+  async function finishWithCapture() {
+    try {
+      const video = cameraRef.current?.getVideoElement();
+      const faceImage = video ? await captureVideoFrame(video) : null;
+      if (!faceImage) {
+        throw new Error("Could not capture your face. Keep the camera on and try again.");
+      }
+      await finish(faceImage);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enrollment failed");
+      setDone(false);
+      setFinishing(false);
     }
   }
 
   function beginFinish() {
     setFinishing(true);
     clearTimer();
-    void finish();
+    void finishWithCapture();
+  }
+
+  function skipFaceId() {
+    setError(null);
+    setFinishing(true);
+    clearTimer();
+    void finish(null);
   }
 
   function handleNext() {
@@ -120,17 +145,37 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
     <div className="face-full">
       <div className="face-copy">
         <div className="face-step">
-          {done ? "All set" : `Step ${stepIndex + 1} of ${ENROLL_STEPS.length}`}
+          {done
+            ? skipped
+              ? "Almost there"
+              : "All set"
+            : `Step ${stepIndex + 1} of ${ENROLL_STEPS.length}`}
         </div>
 
         {done ? (
           <>
             <h3>
-              Face ID is
-              <br />
-              <b>ready to go.</b>
+              {skipped ? (
+                <>
+                  Creating your
+                  <br />
+                  <b>account.</b>
+                </>
+              ) : (
+                <>
+                  Face ID is
+                  <br />
+                  <b>ready to go.</b>
+                </>
+              )}
             </h3>
-            <p>{finishing ? "Saving enrollment…" : "Enrollment complete. Taking you to netbot…"}</p>
+            <p>
+              {finishing
+                ? skipped
+                  ? "Saving account without Face ID…"
+                  : "Saving enrollment…"
+                : "Taking you to netbot…"}
+            </p>
           </>
         ) : (
           <>
@@ -140,10 +185,23 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
               <b>{step.heading[1]}</b>
             </h3>
             <p>{step.copy}</p>
+            {allowSkip && (
+              <p className="face-optional-note">Face ID is optional — you can skip and use email login.</p>
+            )}
           </>
         )}
 
-        {error && <div className="field-error">{error}</div>}
+        {error && (
+          <div className="field-error">
+            {error}
+            {allowSkip && !finishing && (
+              <>
+                {" "}
+                You can skip Face ID and continue with email and password.
+              </>
+            )}
+          </div>
+        )}
 
         <div className="steps">
           {ENROLL_STEPS.map((s, i) => {
@@ -175,7 +233,7 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
                 type="button"
                 className="btn on-dark"
                 onClick={handleNext}
-                disabled={!captureComplete}
+                disabled={!captureComplete || finishing}
               >
                 {captureComplete ? (isLast ? "Finish enrollment" : "Next capture") : "Capturing…"}
               </button>
@@ -183,10 +241,20 @@ export default function EnrollScreen({ onComplete, autoStart = true }: Props) {
                 type="button"
                 className="btn on-dark-ghost"
                 onClick={() => goToStep(stepIndex)}
-                disabled={!captureComplete}
+                disabled={!captureComplete || finishing}
               >
                 Retake
               </button>
+              {allowSkip && (
+                <button
+                  type="button"
+                  className="btn on-dark-ghost"
+                  onClick={skipFaceId}
+                  disabled={finishing}
+                >
+                  Skip Face ID
+                </button>
+              )}
             </>
           )}
         </div>

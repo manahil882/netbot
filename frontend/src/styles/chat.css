@@ -544,10 +544,39 @@
 }
 
 .bubble {
-  padding: 13px 18px;
+  padding: 10px 14px;
   border-radius: 16px;
   font-size: 13.5px;
   line-height: 1.55;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.msg-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.msg.user .msg-stack {
+  align-items: flex-end;
+}
+
+.msg.bot .msg-stack {
+  align-items: flex-start;
+}
+
+/* Invisible bridge so the cursor can move from bubble → actions without losing hover */
+.msg.bot .msg-stack::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 44px;
 }
 
 .msg.user .bubble {
@@ -604,19 +633,33 @@
   background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
+/* Outside the bubble — never changes bubble height; fully hidden until hover */
 .bubble-actions {
-  display: flex;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 3;
+  display: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+}
+
+.msg.user .bubble-actions {
+  left: auto;
+  right: 0;
+}
+
+.msg.bot .msg-stack:hover .bubble-actions,
+.msg.bot .msg-stack:focus-within .bubble-actions {
+  display: flex;
 }
 
 .cite {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 10px;
-  padding: 5px 10px;
+  padding: 3px 8px;
   border-radius: 8px;
   background: var(--card);
   border: 1px solid var(--rule);
@@ -626,51 +669,26 @@
   cursor: pointer;
 }
 
-.speak-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 10px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  color: var(--slate);
-  background: var(--card);
-  border: 1px solid var(--rule);
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.speak-btn:hover,
-.speak-btn.on {
-  color: var(--navy);
-  border-color: var(--navy);
-}
-
+.speak-btn,
 .copy-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 10px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 10.5px;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
   color: var(--slate);
   background: var(--card);
   border: 1px solid var(--rule);
   cursor: pointer;
   font-weight: 600;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
-.msg:hover .copy-btn,
-.msg:focus-within .copy-btn,
+.speak-btn:hover,
+.speak-btn.on,
+.copy-btn:hover,
 .copy-btn:focus-visible {
-  opacity: 1;
-}
-
-.copy-btn:hover {
   color: var(--navy);
   border-color: var(--navy);
 }
@@ -1268,15 +1286,5 @@
 
   .composer-row {
     padding: 12px 20px 16px;
-  }
-
-  .copy-btn {
-    opacity: 1;
-  }
-}
-
-@media (hover: none) {
-  .copy-btn {
-    opacity: 1;
   }
 }

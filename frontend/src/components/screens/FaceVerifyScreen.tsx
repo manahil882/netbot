@@ -21,6 +21,7 @@ export default function FaceVerifyScreen({ email, onSuccess, onCancel }: Props) 
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState<"scanning" | "matched" | "error">("scanning");
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const timerRef = useRef<number | null>(null);
 
   const clearTimer = useCallback(() => {
@@ -31,6 +32,9 @@ export default function FaceVerifyScreen({ email, onSuccess, onCancel }: Props) 
   }, []);
 
   useEffect(() => {
+    if (phase !== "scanning") return;
+
+    setProgress(0);
     const increment = 100 / (SCAN_MS / TICK_MS);
     timerRef.current = window.setInterval(() => {
       setProgress((prev) => {
@@ -44,7 +48,7 @@ export default function FaceVerifyScreen({ email, onSuccess, onCancel }: Props) 
     }, TICK_MS);
 
     return clearTimer;
-  }, [clearTimer]);
+  }, [clearTimer, phase, attempt]);
 
   useEffect(() => {
     if (progress < 100 || phase !== "scanning") return;
@@ -77,6 +81,12 @@ export default function FaceVerifyScreen({ email, onSuccess, onCancel }: Props) 
 
     void verify();
   }, [progress, phase, email, onSuccess, setSession]);
+
+  function retry() {
+    setError(null);
+    setPhase("scanning");
+    setAttempt((n) => n + 1);
+  }
 
   const complete = progress >= 100;
 
@@ -128,9 +138,14 @@ export default function FaceVerifyScreen({ email, onSuccess, onCancel }: Props) 
             </>
           )}
           {phase === "error" && (
-            <button type="button" className="btn on-dark-ghost" onClick={onCancel}>
-              Use password instead
-            </button>
+            <>
+              <button type="button" className="btn on-dark" onClick={retry}>
+                Try Face ID again
+              </button>
+              <button type="button" className="btn on-dark-ghost" onClick={onCancel}>
+                Use password instead
+              </button>
+            </>
           )}
         </div>
       </div>

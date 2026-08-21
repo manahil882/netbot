@@ -225,3 +225,22 @@ def delete_thread_vectors(user_id: str, thread_id: str) -> None:
         )
     except Exception as exc:
         logger.error("Failed to delete thread vectors: %s", exc)
+
+
+def delete_user_vectors(user_id: str) -> None:
+    """Remove every indexed chunk belonging to a user."""
+    from qdrant_client.models import FilterSelector
+
+    client = qdrant_client if qdrant_client is not None else get_qdrant_client()
+    if client is None:
+        return
+    filt = Filter(
+        must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))]
+    )
+    try:
+        client.delete(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            points_selector=FilterSelector(filter=filt),
+        )
+    except Exception as exc:
+        logger.error("Failed to delete user vectors: %s", exc)

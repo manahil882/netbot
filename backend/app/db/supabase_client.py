@@ -21,7 +21,7 @@ def check_supabase_connection() -> bool:
 def create_user(name: str, email: str, hashed_password: str, face_embedding: list | None = None) -> dict:
     payload: dict = {
         "name": name,
-        "email": email,
+        "email": email.strip().lower(),
         "hashed_password": hashed_password,
     }
     if face_embedding is not None:
@@ -33,11 +33,22 @@ def create_user(name: str, email: str, hashed_password: str, face_embedding: lis
 
 
 def get_user_by_email(email: str) -> dict | None:
+    normalized = email.strip().lower()
     try:
         response = (
             supabase.table("users")
             .select("id, name, email, hashed_password, face_embedding")
-            .eq("email", email)
+            .eq("email", normalized)
+            .limit(1)
+            .execute()
+        )
+        if response.data:
+            return response.data[0]
+        # Fallback for older rows stored with different casing
+        response = (
+            supabase.table("users")
+            .select("id, name, email, hashed_password, face_embedding")
+            .ilike("email", normalized)
             .limit(1)
             .execute()
         )
@@ -70,6 +81,25 @@ def update_user_face_embedding(user_id: str, face_embedding: list) -> dict:
     if not response.data:
         raise ValueError("Failed to update face embedding")
     return response.data[0]
+
+
+def update_user_name(user_id: str, name: str) -> dict:
+    response = (
+        supabase.table("users")
+        .update({"name": name.strip()})
+        .eq("id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise ValueError("Failed to update name")
+    return response.data[0]
+
+
+def delete_user(user_id: str) -> None:
+    """Delete a user. Threads/messages cascade via FK when configured."""
+    response = supabase.table("users").delete().eq("id", user_id).execute()
+    if response.data is None:
+        raise ValueError("Failed to delete user")
 
 
 def create_thread(user_id: str, title: str) -> dict:

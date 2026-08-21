@@ -9,14 +9,18 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function SignUpPageClient() {
   const router = useRouter();
-  const { ready, account, markFaceEnrolled } = useAuth();
+  const { ready, authed, account, markFaceEnrolled } = useAuth();
   const searchParams = useSearchParams();
   const faceOnly = searchParams.get("mode") === "face";
 
   useEffect(() => {
-    if (!ready || !faceOnly) return;
-    if (!account) router.replace("/signup");
-  }, [ready, faceOnly, account, router]);
+    if (!ready) return;
+    if (faceOnly) {
+      if (!account) router.replace("/signup");
+      return;
+    }
+    if (authed) router.replace("/chat");
+  }, [ready, faceOnly, account, authed, router]);
 
   async function completeEnrollment(faceImage: Blob | null) {
     if (!faceImage) {

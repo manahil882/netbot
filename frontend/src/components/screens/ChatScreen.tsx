@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import Composer from "@/components/chat/Composer";
 import MessageList from "@/components/chat/MessageList";
@@ -21,11 +22,13 @@ import {
 } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/config";
 import { type Conversation, type Message, type Source } from "@/lib/data";
+import { useAuth } from "@/lib/auth-context";
 import { useSidebar } from "@/lib/sidebar-context";
 import { useSpeechSettings } from "@/lib/speech/useSpeechSettings";
 import { useSpeaker } from "@/lib/useSpeech";
 
 const NEW_CHAT_ID = "new-chat";
+const PIN_KEY_PREFIX = "netbot.pinned.";
 
 function citationsToSources(citations: Citation[]): Source[] {
   return citations.map((c, index) => ({
@@ -55,7 +58,30 @@ function emptyConversation(): Conversation {
   };
 }
 
+function readPinned(userId: string | undefined): string[] {
+  if (!userId || typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PIN_KEY_PREFIX + userId);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePinned(userId: string | undefined, ids: string[]) {
+  if (!userId || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PIN_KEY_PREFIX + userId, JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
 export default function ChatScreen({ full = true }: { full?: boolean }) {
+  const searchParams = useSearchParams();
+  const { account } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([emptyConversation()]);
   const [activeId, setActiveId] = useState(NEW_CHAT_ID);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
@@ -85,6 +111,10 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 2600);
   }, []);
+
+  useEffect(() => {
+    setPinnedIds(readPinned(account?.userId));
+  }, [account?.userId]);
 
   const loadFiles = useCallback(async (threadId: string) => {
     if (!threadId || threadId === NEW_CHAT_ID) {
@@ -125,8 +155,15 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
             } satisfies Conversation;
           }),
         );
-        setConversations(loaded.length > 0 ? loaded : [emptyConversation()]);
-        setActiveId(loaded[0]?.id ?? NEW_CHAT_ID);
+        const next = loaded.length > 0 ? loaded : [emptyConversation()];
+        setConversations(next);
+
+        const sharedId = searchParams.get("c");
+        if (sharedId && next.some((c) => c.id === sharedId)) {
+          setActiveId(sharedId);
+        } else {
+          setActiveId(next[0]?.id ?? NEW_CHAT_ID);
+        }
       } catch (err) {
         flash(err instanceof ApiError ? err.message : "Could not load conversations");
         setConversations([emptyConversation()]);
@@ -136,7 +173,7 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
     }
 
     void loadThreads();
-  }, [flash]);
+  }, [flash, searchParams]);
 
   const updateConversation = useCallback(
     (id: string, update: (conversation: Conversation) => Conversation) => {
@@ -395,7 +432,11 @@ export default function ChatScreen({ full = true }: { full?: boolean }) {
         onNewChat={handleNewChat}
         onRename={(id, title) => void handleRename(id, title)}
         onTogglePin={(id) =>
-          setPinnedIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
+          setPinnedIds((prev) => {
+            const next = prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
+            writePinned(account?.userId, next);
+            return next;
+          })
         }
         onDelete={handleDelete}
         onExport={handleExport}
